@@ -7,4 +7,7 @@ edition = "2021"
 
 [dependencies]
 gpui = { git = "https://github.com/zed-industries/zed" }
+theme = { git = "https://github.com/zed-industries/zed" }
+settings = { git = "https://github.com/zed-industries/zed" }
+assets = { git = "https://github.com/zed-industries/zed" }
 git_cli_wrap = { path = "../git_cli_wrap" }

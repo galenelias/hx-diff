@@ -1,6 +1,7 @@
 use crate::*;
 use git_cli_wrap::*;
 use gpui::*;
+use theme::ActiveTheme;
 
 #[derive(Debug)]
 pub enum FileListEvent {
@@ -56,7 +57,7 @@ impl FileList {
 			.flex_row()
 			.w_full()
 			.px_2()
-			.hover(|s| s.bg(rgb(0x3a3a3a)))
+			.hover(|s| s.bg(cx.theme().colors().element_hover))
 			.id(SharedString::from(format!(
 				"file_list_item_{}",
 				&item.filename
@@ -67,7 +68,12 @@ impl FileList {
 				});
 			}))
 			.child(div().child(item.filename.clone()).flex_grow().text_sm())
-			.child(div().child(item.status.clone()).text_sm())
+			.child(
+				div()
+					.text_color(cx.theme().colors().text_accent)
+					.child(item.status.clone())
+					.text_sm(),
+			)
 	}
 }
 
@@ -78,8 +84,17 @@ impl Render for FileList {
 			.flex_col()
 			.min_w_64()
 			.gap(px(1.))
-			.bg(rgb(0x457b9d))
-			.child(div().bg(rgb(0x1d3557)).child("Toolbar"))
+			.border_r_1()
+			.border_color(cx.theme().colors().border)
+			.bg(cx.theme().colors().panel_background)
+			.child(
+				div()
+					.border_b_1()
+					.border_color(cx.theme().colors().border)
+					.bg(cx.theme().colors().title_bar_background)
+					.p_2()
+					.child("Toolbar"),
+			)
 			.child(
 				uniform_list(cx.view().clone(), "entries", self.items.len(), {
 					|this, range, cx| {

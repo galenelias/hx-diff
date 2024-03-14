@@ -1,5 +1,7 @@
 use crate::*;
+use gpui::prelude::*;
 use gpui::*;
+use theme::ActiveTheme;
 
 pub struct HxDiff {
 	weak_self: WeakView<Self>,
@@ -40,11 +42,12 @@ impl HxDiff {
 }
 
 impl Render for HxDiff {
-	fn render(&mut self, _cx: &mut ViewContext<Self>) -> impl IntoElement {
+	fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
 		div()
 			.size_full()
 			.flex()
 			.flex_col()
+			.text_color(cx.theme().colors().text)
 			.child(
 				div() // main status bar
 					.flex_grow()
@@ -57,10 +60,12 @@ impl Render for HxDiff {
 							.flex()
 							.flex_col()
 							.size_full()
+							.p_3()
 							.id("DiffView")
 							.overflow_x_scroll()
 							.overflow_y_scroll()
-							.bg(rgb(0xa8dadc))
+							.bg(cx.theme().colors().editor_background)
+							.text_color(cx.theme().colors().editor_foreground)
 							.text_sm()
 							.child(self.text.clone()),
 					),
@@ -68,7 +73,9 @@ impl Render for HxDiff {
 			.child(
 				div() // Status bar
 					.h(px(30.0))
-					.bg(rgb(0x1d3557))
+					.border_t_2()
+					.border_color(cx.theme().colors().border)
+					.bg(cx.theme().colors().status_bar_background)
 					.child("Status Bar"),
 			)
 	}
