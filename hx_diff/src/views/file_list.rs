@@ -3,37 +3,13 @@ use git_cli_wrap::*;
 use gpui::*;
 
 #[derive(Debug)]
-pub enum Event {
-	OpenedEntry { path: SharedString },
+pub enum FileListEvent {
+	OpenedEntry { filename: SharedString },
 }
 
-#[derive(IntoElement, Clone)]
 struct ListItem {
 	filename: SharedString,
 	status: SharedString,
-}
-
-impl RenderOnce for ListItem {
-	fn render(self, _cx: &mut WindowContext) -> impl IntoElement {
-		div()
-			.flex()
-			.flex_row()
-			.px_2()
-			.hover(|s| s.bg(rgb(0x3a3a3a)))
-			.id(SharedString::from(format!(
-				"file_list_item_{}",
-				&self.filename
-			)))
-			.on_click({
-				let filename = self.filename.clone();
-				move |_event, _cx| {
-					// _cx.emit()
-					println!("Clicked on {}", filename);
-				}
-			})
-			.child(div().child(self.filename).flex_grow().text_sm())
-			.child(div().child(self.status).text_sm())
-	}
 }
 
 impl ListItem {
@@ -45,20 +21,15 @@ impl ListItem {
 	}
 }
 
-struct State {
-	items: Vec<ListItem>,
-}
-
 pub struct FileList {
 	status: git_cli_wrap::GitStatus,
-	list_model: Model<State>,
-	list_state: ListState,
+	items: Vec<ListItem>,
 	hx_diff: WeakView<HxDiff>,
 }
 
 impl FileList {
 	pub fn new(hx_diff: WeakView<HxDiff>, cx: &mut WindowContext) -> View<FileList> {
-		let file_list = cx.new_view(|cx| {
+		let file_list = cx.new_view(|_cx| {
 			let status = git_cli_wrap::get_status().expect("Failed to get git status");
 
 			let items = status
@@ -68,39 +39,39 @@ impl FileList {
 				.map(|e| ListItem::new(e.path.clone(), e.unstaged_status.to_string()))
 				.collect::<Vec<_>>();
 
-			let items_copy = items.clone();
-
-			let list_state = ListState::new(
-				items_copy.len(),
-				ListAlignment::Top,
-				Pixels(20.0),
-				move |idx, _cx| div().child(items_copy[idx].clone()).into_any_element(),
-			);
-			let list_model = cx.new_model(|_cx| State { items });
-
 			Self {
 				status,
-				list_model,
-				list_state,
+				items,
 				hx_diff,
 			}
 		});
 
-		cx.subscribe(&file_list, {
-			move |_, event, _| match event {
-				&Event::OpenedEntry { ref path } => {
-					println!("Opened entry: {}", path);
-				}
-			}
-		})
-		.detach();
-
 		file_list
+	}
+
+	fn render_entry(&self, item: &ListItem, cx: &mut ViewContext<Self>) -> Stateful<Div> {
+		let filename = item.filename.clone();
+		div()
+			.flex()
+			.flex_row()
+			.px_2()
+			.hover(|s| s.bg(rgb(0x3a3a3a)))
+			.id(SharedString::from(format!(
+				"file_list_item_{}",
+				&item.filename
+			)))
+			.on_click(cx.listener(move |_this, _event: &gpui::ClickEvent, cx| {
+				cx.emit(FileListEvent::OpenedEntry {
+					filename: filename.clone(),
+				});
+			}))
+			.child(div().child(item.filename.clone()).flex_grow().text_sm())
+			.child(div().child(item.status.clone()).text_sm())
 	}
 }
 
 impl Render for FileList {
-	fn render(&mut self, _cx: &mut ViewContext<Self>) -> impl IntoElement {
+	fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
 		div()
 			.flex()
 			.flex_col()
@@ -108,14 +79,17 @@ impl Render for FileList {
 			.gap(px(1.))
 			.bg(rgb(0x457b9d))
 			.child(div().bg(rgb(0x1d3557)).child("Toolbar"))
-			.child(list(self.list_state.clone()).w_full().h_full())
-		// 	div()
-		// 		.flex()
-		// 		.flex_grow()
-		// 		.bg(rgb(0x457b9d))
-		// 		.child("FileList\n\n-File 1\n-File 2"),
-		// )
+			.child(
+				uniform_list(cx.view().clone(), "entries", self.items.len(), {
+					|this, range, cx| {
+						range
+							.map(|i| this.render_entry(&this.items[i], cx))
+							.collect()
+					}
+				})
+				.w_full(),
+			)
 	}
 }
 
-impl EventEmitter<Event> for FileList {}
+impl EventEmitter<FileListEvent> for FileList {}

@@ -19,10 +19,6 @@ pub enum EntryStatus {
 	Deleted,
 	Renamed,
 	None,
-	// Copied,
-	// Updated,
-	// Unmerged,
-	// Ignored,
 }
 
 impl EntryStatus {
@@ -33,11 +29,6 @@ impl EntryStatus {
 			'M' => EntryStatus::Modified,
 			'D' => EntryStatus::Deleted,
 			'.' => EntryStatus::None,
-			// '!' => EntryStatus::Untracked,
-			// 'R' => EntryStatus::Renamed,
-			// 'C' => EntryStatus::Copied,
-			// 'U' => EntryStatus::Updated,
-			// 'I' => EntryStatus::Ignored,
 			_ => panic!("Unknown status: {}", status_char),
 		}
 	}
@@ -118,6 +109,24 @@ fn parse_status(status: &str) -> Result<GitStatus, GitError> {
 		branch_upstrem,
 		entries,
 	})
+}
+
+pub fn get_diff(path: &str) -> Result<String, GitError> {
+	let output = Command::new("git")
+		.arg("diff")
+		.arg("-p")
+		.arg("--")
+		.arg(path)
+		.output()
+		.expect("failed to execute process");
+
+	let output_string = String::from_utf8(output.stdout).expect("Invalid utf-8");
+
+	if let Some(body_start) = output_string.find("@@ ") {
+		Ok(output_string[body_start..].to_string())
+	} else {
+		Err(GitError {})
+	}
 }
 
 // #[cfg(test)]
