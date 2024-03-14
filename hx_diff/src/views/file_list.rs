@@ -54,6 +54,7 @@ impl FileList {
 		div()
 			.flex()
 			.flex_row()
+			.w_full()
 			.px_2()
 			.hover(|s| s.bg(rgb(0x3a3a3a)))
 			.id(SharedString::from(format!(

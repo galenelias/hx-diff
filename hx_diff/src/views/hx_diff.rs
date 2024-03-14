@@ -50,20 +50,24 @@ impl Render for HxDiff {
 					.flex_grow()
 					.flex()
 					.flex_row()
+					.min_h_0() // Prevent the height from auto-fitting the children
 					.child(self.file_list.clone())
 					.child(
-						div().flex_grow().bg(rgb(0xa8dadc)).child(
-							div()
-								.p_2()
-								.id("DiffView")
-								.overflow_y_scroll()
-								.child(self.text.clone()),
-						),
+						div()
+							.flex()
+							.flex_col()
+							.size_full()
+							.id("DiffView")
+							.overflow_x_scroll()
+							.overflow_y_scroll()
+							.bg(rgb(0xa8dadc))
+							.text_sm()
+							.child(self.text.clone()),
 					),
 			)
 			.child(
 				div() // Status bar
-					.min_h(px(30.0))
+					.h(px(30.0))
 					.bg(rgb(0x1d3557))
 					.child("Status Bar"),
 			)
