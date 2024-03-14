@@ -28,7 +28,6 @@ fn main() {
 		let all_themes = theme_registry.list_names(true);
 		let args: Vec<String> = env::args().collect();
 		let theme_name = if args.len() > 1 {
-			println!("Theme argument: {}", args[1]);
 			if args[1].chars().all(|c| c.is_ascii_digit()) {
 				all_themes[args[1].parse::<usize>().expect("Invalid theme index")].to_string()
 			} else {
