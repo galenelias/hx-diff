@@ -3,22 +3,26 @@ use std::process::Command;
 #[derive(Debug)]
 pub struct GitError {}
 
+#[derive(Debug)]
 pub struct GitStatus {
 	pub branch_oid: String,
 	pub branch_head: String,
 	pub branch_upstrem: String,
+	pub entries: Vec<Entry>,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum EntryStatus {
 	Added,
 	Untracked,
 	Modified,
 	Deleted,
 	Renamed,
-	Copied,
-	Updated,
-	Unmerged,
-	Ignored,
+	None,
+	// Copied,
+	// Updated,
+	// Unmerged,
+	// Ignored,
 }
 
 impl EntryStatus {
@@ -28,6 +32,7 @@ impl EntryStatus {
 			'A' => EntryStatus::Added,
 			'M' => EntryStatus::Modified,
 			'D' => EntryStatus::Deleted,
+			'.' => EntryStatus::None,
 			// '!' => EntryStatus::Untracked,
 			// 'R' => EntryStatus::Renamed,
 			// 'C' => EntryStatus::Copied,
@@ -36,8 +41,20 @@ impl EntryStatus {
 			_ => panic!("Unknown status: {}", status_char),
 		}
 	}
+
+	pub fn to_string(&self) -> String {
+		match self {
+			EntryStatus::Added => "Added".to_string(),
+			EntryStatus::Untracked => "Untracked".to_string(),
+			EntryStatus::Modified => "Modified".to_string(),
+			EntryStatus::Deleted => "Deleted".to_string(),
+			EntryStatus::Renamed => "Renamed".to_string(),
+			EntryStatus::None => "None".to_string(),
+		}
+	}
 }
 
+#[derive(Debug)]
 pub struct Entry {
 	pub staged_status: EntryStatus,
 	pub unstaged_status: EntryStatus,
@@ -82,6 +99,7 @@ fn parse_status(status: &str) -> Result<GitStatus, GitError> {
 			let staged_status = EntryStatus::from_u8(&file_status.as_bytes()[0]);
 			let unstaged_status = EntryStatus::from_u8(&file_status.as_bytes()[1]);
 
+			// TODO: Handle rename confidence parameter
 			iter.nth(5);
 			let path = iter.next().unwrap().to_string();
 
@@ -98,6 +116,7 @@ fn parse_status(status: &str) -> Result<GitStatus, GitError> {
 		branch_oid,
 		branch_head,
 		branch_upstrem,
+		entries,
 	})
 }
 
