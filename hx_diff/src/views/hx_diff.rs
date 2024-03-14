@@ -14,16 +14,18 @@ pub struct DraggedPanel(pub PanelPosition);
 
 pub struct HxDiff {
 	weak_self: WeakView<Self>,
-	file_list: View<FileList>,
+	file_pane: View<FileList>,
+	diff_pane: View<DiffPane>,
 	text: SharedString,
 }
 
 impl HxDiff {
 	pub fn new(cx: &mut ViewContext<Self>) -> HxDiff {
 		let weak_handle = cx.view().downgrade();
-		let file_list = FileList::new(weak_handle.clone(), cx);
+		let file_pane = FileList::new(weak_handle.clone(), cx);
+		let diff_pane = DiffPane::new(weak_handle.clone(), cx);
 
-		cx.subscribe(&file_list, {
+		cx.subscribe(&file_pane, {
 			move |subscriber, _, event, cx| match event {
 				&FileListEvent::OpenedEntry { ref filename } => {
 					subscriber.open_file(filename, cx);
@@ -34,7 +36,8 @@ impl HxDiff {
 
 		HxDiff {
 			weak_self: weak_handle,
-			file_list,
+			file_pane,
+			diff_pane,
 			text: SharedString::from("Diff content goes here."),
 		}
 	}
@@ -44,9 +47,9 @@ impl HxDiff {
 	}
 
 	fn open_file(&mut self, filename: &str, cx: &mut ViewContext<Self>) {
-		self.text =
-			SharedString::from(git_cli_wrap::get_diff(&filename).expect("Could not read file."));
-		cx.refresh();
+		self.diff_pane.update(cx, |diff_pane, cx| {
+			diff_pane.open_diff(filename, cx);
+		});
 	}
 }
 
@@ -70,31 +73,15 @@ impl Render for HxDiff {
 							match e.drag(cx).0 {
 								PanelPosition::Left => {
 									let size = /*this.bounds.left() +*/ e.event.position.x;
-									this.file_list.update(cx, |file_list, cx| {
-										file_list.resize_panel(Some(size), cx);
+									this.file_pane.update(cx, |file_pane, cx| {
+										file_pane.resize_panel(Some(size), cx);
 									});
 								}
 							}
 						}),
 					)
-					.child(self.file_list.clone())
-					.child(
-						div()
-							.flex()
-							.flex_col()
-							// .size_full()
-							// .flex_grow()
-							// .h_full()
-							.flex_1()
-							.p_3()
-							.id("DiffView")
-							.overflow_x_scroll()
-							.overflow_y_scroll()
-							.bg(cx.theme().colors().editor_background)
-							.text_color(cx.theme().colors().editor_foreground)
-							.text_sm()
-							.child(self.text.clone()),
-					),
+					.child(self.file_pane.clone())
+					.child(self.diff_pane.clone()),
 			)
 			.child(
 				div() // Status bar
