@@ -16,7 +16,6 @@ pub struct HxDiff {
 	weak_self: WeakView<Self>,
 	file_pane: View<FileList>,
 	diff_pane: View<DiffPane>,
-	text: SharedString,
 }
 
 impl HxDiff {
@@ -38,7 +37,6 @@ impl HxDiff {
 			weak_self: weak_handle,
 			file_pane,
 			diff_pane,
-			text: SharedString::from("Diff content goes here."),
 		}
 	}
 
