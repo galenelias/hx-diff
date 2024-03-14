@@ -1,7 +1,10 @@
 use crate::*;
 use git_cli_wrap::*;
 use gpui::*;
+use hx_diff::{DraggedPanel, PanelPosition};
 use theme::ActiveTheme;
+
+const RESIZE_HANDLE_SIZE: Pixels = Pixels(6.);
 
 #[derive(Debug)]
 pub enum FileListEvent {
@@ -26,10 +29,17 @@ pub struct FileList {
 	status: git_cli_wrap::GitStatus,
 	items: Vec<ListItem>,
 	hx_diff: WeakView<HxDiff>,
+	model: Model<FileListModel>,
+}
+
+pub struct FileListModel {
+	width: Option<Pixels>,
 }
 
 impl FileList {
 	pub fn new(hx_diff: WeakView<HxDiff>, cx: &mut WindowContext) -> View<FileList> {
+		let model = cx.new_model(|_cx| FileListModel { width: None });
+
 		let file_list = cx.new_view(|_cx| {
 			let status = git_cli_wrap::get_status().expect("Failed to get git status");
 
@@ -44,10 +54,18 @@ impl FileList {
 				status,
 				items,
 				hx_diff,
+				model,
 			}
 		});
 
 		file_list
+	}
+
+	pub fn resize_panel(&mut self, size: Option<Pixels>, cx: &mut ViewContext<Self>) {
+		self.model.update(cx, |model, cx| {
+			model.width = size;
+			cx.notify()
+		});
 	}
 
 	fn render_entry(&self, item: &ListItem, cx: &mut ViewContext<Self>) -> Stateful<Div> {
@@ -79,10 +97,25 @@ impl FileList {
 
 impl Render for FileList {
 	fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
+		let width = self.model.read(cx).width;
+
+		let handle = div()
+			.id("resize-handle")
+			.absolute()
+			.right(-RESIZE_HANDLE_SIZE / 2.)
+			.top(px(0.))
+			.h_full()
+			.w(RESIZE_HANDLE_SIZE)
+			.cursor_col_resize()
+			.on_drag(DraggedPanel(PanelPosition::Left), |pane, cx| {
+				cx.stop_propagation();
+				cx.new_view(|_| pane.clone())
+			})
+			.occlude();
 		div()
 			.flex()
 			.flex_col()
-			.min_w_64()
+			.w(width.unwrap_or(px(300.)))
 			.gap(px(1.))
 			.border_r_1()
 			.border_color(cx.theme().colors().border)
@@ -105,6 +138,7 @@ impl Render for FileList {
 				})
 				.w_full(),
 			)
+			.child(handle)
 	}
 }
 
