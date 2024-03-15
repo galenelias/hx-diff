@@ -1,6 +1,6 @@
 use crate::*;
 use gpui::{prelude::FluentBuilder, *};
-use theme::ActiveTheme;
+use theme::{ActiveTheme, ThemeSettings};
 
 enum DiffType {
 	Header,
@@ -112,16 +112,15 @@ impl DiffPane {
 
 impl Render for DiffPane {
 	fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
+		let settings = ThemeSettings::get_global(cx);
+
 		div()
 			.flex()
 			.flex_col()
 			.flex_1()
-			// .pl_3()
-			// .p_3()
-			.id("DiffView")
 			.bg(cx.theme().colors().editor_background)
-			.text_sm()
-			.font("Menlo")
+			.text_size(settings.buffer_font_size(cx))
+			.font(settings.buffer_font.family.clone())
 			.child(uniform_list(
 				cx.view().clone(),
 				"entries",
