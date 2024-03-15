@@ -120,13 +120,15 @@ impl Render for FileList {
 			.border_r_1()
 			.border_color(cx.theme().colors().border)
 			.bg(cx.theme().colors().panel_background)
+			.gap(rems(0.3))
 			.child(
 				div()
 					.border_b_1()
 					.border_color(cx.theme().colors().border)
 					.bg(cx.theme().colors().title_bar_background)
-					.p_2()
-					.child("Toolbar"),
+					.pl_3()
+					.pt_1()
+					.child("Status"),
 			)
 			.child(
 				uniform_list(cx.view().clone(), "entries", self.items.len(), {

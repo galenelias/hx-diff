@@ -1,6 +1,6 @@
 use gpui::*;
 
-pub static WIDTH: f64 = 800.0;
+pub static WIDTH: f64 = 1024.0;
 pub static HEIGHT: f64 = 600.0;
 
 // Setup window helper from Duane Bester https://github.com/duanebester which is based on work
@@ -13,8 +13,7 @@ pub fn setup_window(app_width: f64, app_height: f64, cx: &mut AppContext) -> Win
 	options.bounds = Some(Bounds::centered(Size { width, height }, cx));
 	options.titlebar = Some(TitlebarOptions {
 		title: Some("HxDiff".into()),
-		appears_transparent: Default::default(),
-		traffic_light_position: Default::default(),
+		..Default::default()
 	});
 
 	options
