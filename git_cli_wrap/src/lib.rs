@@ -111,14 +111,27 @@ fn parse_status(status: &str) -> Result<GitStatus, GitError> {
 	})
 }
 
-pub fn get_diff(path: &str) -> Result<String, GitError> {
-	let output = Command::new("git")
-		.arg("diff")
-		.arg("-p")
-		.arg("--")
-		.arg(path)
-		.output()
-		.expect("failed to execute process");
+pub fn get_diff(path: &std::path::Path, is_staged: bool) -> Result<String, GitError> {
+	let mut cmd = Command::new("git");
+	cmd.arg("diff").arg("-p");
+
+	if is_staged {
+		cmd.arg("--staged");
+	}
+
+	let cmd = cmd.arg("--").arg(path);
+
+	let output = cmd.output().expect("failed to execute process");
+
+	if !output.status.success() {
+		println!("Error: Failed to run git diff");
+		println!("---");
+		println!(
+			"{}",
+			String::from_utf8(output.stderr).expect("Invalid utf-8")
+		);
+		return Err(GitError {});
+	}
 
 	let output_string = String::from_utf8(output.stdout).expect("Invalid utf-8");
 

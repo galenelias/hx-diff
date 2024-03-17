@@ -1,5 +1,5 @@
 use crate::*;
-use gpui::{prelude::FluentBuilder, *};
+use gpui::*;
 use theme::{ActiveTheme, ThemeSettings};
 
 enum DiffType {
@@ -57,9 +57,15 @@ impl DiffPane {
 		file_list
 	}
 
-	pub fn open_diff(&mut self, filename: &str, cx: &mut ViewContext<Self>) {
-		self.diff_text =
-			SharedString::from(git_cli_wrap::get_diff(&filename).expect("Could not read file."));
+	pub fn open_diff(
+		&mut self,
+		filename: &std::path::Path,
+		is_staged: bool,
+		_cx: &mut ViewContext<Self>,
+	) {
+		self.diff_text = SharedString::from(
+			git_cli_wrap::get_diff(&filename, is_staged).expect("Could not read file."),
+		);
 
 		self.diff_lines = process_diff(&self.diff_text);
 	}
@@ -77,11 +83,6 @@ impl DiffPane {
 			DiffType::Normal => cx.theme().colors().editor_background,
 			DiffType::Added => cx.theme().status().created_background,
 			DiffType::Removed => cx.theme().status().deleted_background,
-		};
-
-		let border = match item.diff_type {
-			DiffType::Header => Some(px(3.)),
-			_ => None,
 		};
 
 		div()

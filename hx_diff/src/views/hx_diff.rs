@@ -25,9 +25,12 @@ impl HxDiff {
 		let diff_pane = DiffPane::new(weak_handle.clone(), cx);
 
 		cx.subscribe(&file_pane, {
-			move |subscriber, _, event, cx| match event {
-				&FileListEvent::OpenedEntry { ref filename } => {
-					subscriber.open_file(filename, cx);
+			move |hx_diff, _, event, cx| match event {
+				&FileListEvent::OpenedEntry {
+					ref filename,
+					is_staged,
+				} => {
+					hx_diff.open_file(filename, is_staged, cx);
 				}
 			}
 		})
@@ -44,9 +47,14 @@ impl HxDiff {
 		self.weak_self.clone()
 	}
 
-	fn open_file(&mut self, filename: &str, cx: &mut ViewContext<Self>) {
+	fn open_file(
+		&mut self,
+		filename: &std::path::Path,
+		is_staged: bool,
+		cx: &mut ViewContext<Self>,
+	) {
 		self.diff_pane.update(cx, |diff_pane, cx| {
-			diff_pane.open_diff(filename, cx);
+			diff_pane.open_diff(filename, is_staged, cx);
 		});
 	}
 }
@@ -67,7 +75,6 @@ impl Render for HxDiff {
 					.min_h_0() // Prevent the height from auto-fitting the children
 					.on_drag_move(
 						cx.listener(move |this, e: &DragMoveEvent<DraggedPanel>, cx| {
-							// println!("on_drag_move! {:?}", e.event.position);
 							match e.drag(cx).0 {
 								PanelPosition::Left => {
 									let size = /*this.bounds.left() +*/ e.event.position.x;
@@ -81,14 +88,15 @@ impl Render for HxDiff {
 					.child(self.file_pane.clone())
 					.child(self.diff_pane.clone()),
 			)
-			.child(
-				div() // Status bar
-					.h(px(30.0))
-					.border_t_2()
-					.border_color(cx.theme().colors().border)
-					.bg(cx.theme().colors().status_bar_background)
-					.child("Status Bar"),
-			)
+		// .child(
+		// 	div() // Status bar - Nothing useful here yet
+		// 		.h(px(30.0))
+		// 		.border_t_2()
+		// 		.border_color(cx.theme().colors().border)
+		// 		.bg(cx.theme().colors().status_bar_background)
+		// 		.child("Status Bar"),
+
+		// )
 	}
 }
 
