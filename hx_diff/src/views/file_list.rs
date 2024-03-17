@@ -46,45 +46,42 @@ impl FileList {
 			let status = git_cli_wrap::get_status().expect("Failed to get git status");
 
 			let mut items = Vec::new();
-			let mut last_dir = None;
 
 			let mut process_items = |get_status: fn(&Entry) -> EntryStatus,
 			                         is_staged: bool,
 			                         category_name: &'static str| {
 				let mut has_items = false;
+				let mut last_dir = None;
+
 				for entry in status
 					.entries
 					.iter()
 					.filter(|e| get_status(e) != EntryStatus::None)
 				{
+					let path = &entry.path;
+
 					if !has_items {
 						items.push(ListItem {
 							item_type: ListItemType::Category,
-							path: entry.path.clone().into(),
+							path: path.clone().into(),
 							is_staged,
 							label: SharedString::from(category_name),
 							status: "".into(),
 						});
 						has_items = true;
 					}
-					let path = Path::new(&entry.path);
 					let parent_dir = path.parent().expect(&format!(
 						"Failed to get parent directory for '{}'",
-						&entry.path
+						entry.path.display()
 					));
 
 					if Some(parent_dir) != last_dir {
 						last_dir = Some(parent_dir);
 						items.push(ListItem {
 							item_type: ListItemType::Directory,
-							path: PathBuf::from(&entry.path),
+							path: path.clone(),
 							is_staged,
-							label: parent_dir
-								.canonicalize()
-								.unwrap()
-								.to_string_lossy()
-								.to_string()
-								.into(),
+							label: parent_dir.to_string_lossy().to_string().into(),
 							status: "".into(),
 						});
 					}
@@ -92,7 +89,7 @@ impl FileList {
 					let status = get_status(entry).to_string();
 					items.push(ListItem {
 						item_type: ListItemType::File,
-						path: PathBuf::from(&entry.path),
+						path: path.clone(),
 						is_staged,
 						label: path
 							.file_name()

@@ -50,7 +50,7 @@ pub struct Entry {
 	pub staged_status: EntryStatus,
 	pub unstaged_status: EntryStatus,
 	// TODO: Add more fields
-	pub path: String,
+	pub path: std::path::PathBuf,
 	pub original_path: Option<String>,
 }
 
@@ -92,12 +92,12 @@ fn parse_status(status: &str) -> Result<GitStatus, GitError> {
 
 			// TODO: Handle rename confidence parameter
 			iter.nth(5);
-			let path = iter.next().unwrap().to_string();
+			let path = iter.next().unwrap();
 
 			entries.push(Entry {
 				staged_status,
 				unstaged_status,
-				path,
+				path: std::path::Path::new(path).canonicalize().unwrap(),
 				original_path: None,
 			});
 		}
