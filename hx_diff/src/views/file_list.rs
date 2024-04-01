@@ -2,7 +2,7 @@ use crate::*;
 use git_cli_wrap::*;
 use gpui::*;
 use hx_diff::{DraggedPanel, PanelPosition};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use theme::ActiveTheme;
 
 const RESIZE_HANDLE_SIZE: Pixels = Pixels(6.);
@@ -131,7 +131,12 @@ impl FileList {
 		});
 	}
 
-	fn render_entry(&self, item: &ListItem, cx: &mut ViewContext<Self>) -> Stateful<Div> {
+	fn render_entry(
+		&self,
+		item: &ListItem,
+		index: usize,
+		cx: &mut ViewContext<Self>,
+	) -> ui::ListItem {
 		let item_type = item.item_type;
 		let path = item.path.clone();
 		let is_staged = item.is_staged;
@@ -148,39 +153,42 @@ impl FileList {
 			ListItemType::File => cx.theme().colors().text,
 		};
 
-		div()
-			.flex()
-			.flex_row()
-			.w_full()
-			.px_2()
-			.text_color(text_color)
-			.hover(|s| s.bg(cx.theme().colors().element_hover))
-			.id(SharedString::from(format!(
-				"file_list_item_{}_{}",
-				&item.path.to_string_lossy(),
-				is_staged
-			)))
-			.on_click(cx.listener(move |_this, _event: &gpui::ClickEvent, cx| {
-				if item_type == ListItemType::File {
-					cx.emit(FileListEvent::OpenedEntry {
-						filename: path.clone(),
-						is_staged,
-					});
-				}
-			}))
-			.child(
-				div()
-					.ml(indent as f32 * px(12.))
-					.child(item.label.clone())
-					.flex_grow()
-					.text_sm(),
-			)
-			.child(
-				div()
-					.text_color(cx.theme().colors().text_accent)
-					.child(item.status.clone())
-					.text_sm(),
-			)
+		let id = SharedString::from(format!(
+			"file_list_item_{}_{}",
+			&item.path.to_string_lossy(),
+			is_staged
+		));
+
+		ui::ListItem::new(index).child(
+			div()
+				.flex()
+				.flex_row()
+				.w_full()
+				.px_2()
+				.text_color(text_color)
+				.id(id)
+				.on_click(cx.listener(move |_this, _event: &gpui::ClickEvent, cx| {
+					if item_type == ListItemType::File {
+						cx.emit(FileListEvent::OpenedEntry {
+							filename: path.clone(),
+							is_staged,
+						});
+					}
+				}))
+				.child(
+					div()
+						.ml(indent as f32 * px(12.))
+						.child(item.label.clone())
+						.flex_grow()
+						.text_sm(),
+				)
+				.child(
+					div()
+						.text_color(cx.theme().colors().text_accent)
+						.child(item.status.clone())
+						.text_sm(),
+				),
+		)
 	}
 }
 
@@ -223,7 +231,7 @@ impl Render for FileList {
 				uniform_list(cx.view().clone(), "entries", self.items.len(), {
 					|this, range, cx| {
 						range
-							.map(|i| this.render_entry(&this.items[i], cx))
+							.map(|i| this.render_entry(&this.items[i], i, cx))
 							.collect()
 					}
 				})
