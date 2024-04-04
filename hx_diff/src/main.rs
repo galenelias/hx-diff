@@ -1,5 +1,6 @@
 mod common;
 mod views;
+mod workspace;
 
 use crate::common::{setup_window, HEIGHT, WIDTH};
 use assets::Assets;
@@ -34,6 +35,8 @@ fn cycle_theme(cx: &mut AppContext) {
 	cx.refresh()
 }
 
+// Another..
+//
 fn main() {
 	App::new().run(|cx: &mut AppContext| {
 		let mut store = SettingsStore::default();

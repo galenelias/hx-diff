@@ -45,11 +45,16 @@ impl EntryStatus {
 	}
 }
 
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
+pub struct Sha1Hash([u8; 40]);
+
 #[derive(Debug)]
 pub struct Entry {
 	pub staged_status: EntryStatus,
 	pub unstaged_status: EntryStatus,
 	// TODO: Add more fields
+	pub head_sha1: Sha1Hash,
+	pub index_sha1: Sha1Hash,
 	pub path: std::path::PathBuf,
 	pub original_path: Option<String>,
 }
@@ -90,13 +95,19 @@ fn parse_status(status: &str) -> Result<GitStatus, GitError> {
 			let staged_status = EntryStatus::from_u8(&file_status.as_bytes()[0]);
 			let unstaged_status = EntryStatus::from_u8(&file_status.as_bytes()[1]);
 
-			// TODO: Handle rename confidence parameter
-			iter.nth(5);
+			iter.nth(2); // Skip: file mode for HEAD, index, worktree
+			 // TODO: Handle rename confidence parameter
+
+			let head_sha1 = iter.next().unwrap().to_owned();
+			let index_sha1 = iter.next().unwrap().to_owned();
+
 			let path = iter.next().unwrap();
 
 			entries.push(Entry {
 				staged_status,
 				unstaged_status,
+				head_sha1: Sha1Hash(head_sha1.as_bytes().try_into().unwrap()),
+				index_sha1: Sha1Hash(index_sha1.as_bytes().try_into().unwrap()),
 				path: std::path::Path::new(path).canonicalize().unwrap(),
 				original_path: None,
 			});

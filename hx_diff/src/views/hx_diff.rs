@@ -3,6 +3,8 @@ use gpui::prelude::*;
 use gpui::*;
 use theme::ActiveTheme;
 
+use crate::workspace::*;
+
 #[derive(Clone)]
 pub enum PanelPosition {
 	Left,
@@ -16,6 +18,8 @@ pub struct HxDiff {
 	weak_self: WeakView<Self>,
 	file_pane: View<FileList>,
 	diff_pane: View<DiffPane>,
+
+	workspace: Option<Workspace>,
 }
 
 impl HxDiff {
@@ -40,6 +44,7 @@ impl HxDiff {
 			weak_self: weak_handle,
 			file_pane,
 			diff_pane,
+			workspace: None,
 		}
 	}
 

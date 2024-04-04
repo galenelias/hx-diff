@@ -19,6 +19,8 @@ enum ListItemType {
 	File,
 }
 
+// Test - TODO, delete me
+
 #[derive(Debug)]
 struct ListItem {
 	item_type: ListItemType,
