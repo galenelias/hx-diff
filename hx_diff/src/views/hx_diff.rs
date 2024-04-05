@@ -18,14 +18,16 @@ pub struct HxDiff {
 	weak_self: WeakView<Self>,
 	file_pane: View<FileList>,
 	diff_pane: View<DiffPane>,
-
-	workspace: Option<Workspace>,
+	workspace: Model<Workspace>,
 }
 
 impl HxDiff {
 	pub fn new(cx: &mut ViewContext<Self>) -> HxDiff {
 		let weak_handle = cx.view().downgrade();
-		let file_pane = FileList::new(weak_handle.clone(), cx);
+
+		let workspace = cx.new_model(|_cx| Workspace::for_git_status());
+
+		let file_pane = FileList::new(weak_handle.clone(), workspace.clone(), cx);
 		let diff_pane = DiffPane::new(weak_handle.clone(), cx);
 
 		cx.subscribe(&file_pane, {
@@ -44,7 +46,7 @@ impl HxDiff {
 			weak_self: weak_handle,
 			file_pane,
 			diff_pane,
-			workspace: None,
+			workspace: workspace.clone(),
 		}
 	}
 

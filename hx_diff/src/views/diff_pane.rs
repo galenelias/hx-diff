@@ -64,7 +64,8 @@ impl DiffPane {
 		_cx: &mut ViewContext<Self>,
 	) {
 		self.diff_text = SharedString::from(
-			git_cli_wrap::get_diff(&filename, is_staged).expect("Could not read file."),
+			git_cli_wrap::get_diff(&filename, is_staged)
+				.expect(&format!("Could not read file: {}.", filename.display())),
 		);
 
 		self.diff_lines = process_diff(&self.diff_text);

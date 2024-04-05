@@ -3,7 +3,6 @@
 use core::sync::atomic::AtomicUsize;
 use core::sync::atomic::Ordering::SeqCst;
 use git_cli_wrap as git;
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -14,6 +13,14 @@ impl ProjectEntryId {
 
 	pub fn new(counter: &AtomicUsize) -> Self {
 		Self(counter.fetch_add(1, SeqCst))
+	}
+
+	pub fn to_proto(&self) -> u64 {
+		self.0 as u64
+	}
+
+	pub fn to_usize(&self) -> usize {
+		self.0
 	}
 }
 
@@ -52,19 +59,20 @@ pub enum EntryKind {
 // File State: HEAD, Commit, Index (staging), Working Directory
 
 pub struct Entry {
-	id: ProjectEntryId,
-	kind: EntryKind,
-	path: PathBuf,
+	pub id: ProjectEntryId,
+	pub kind: EntryKind,
+	pub path: PathBuf,
 	// status: String,
 }
 
 pub struct Workspace {
 	// entries: HashMap<ProjectEntryId, Entry>,
-	entries: Vec<Entry>,
+	pub entries: Vec<Entry>,
 }
 
 impl Workspace {
-	fn for_git_status() -> Self {
+	pub fn for_git_status() -> Self {
+		println!("Workspace::for_git_status()");
 		let git_status = git::get_status().expect("Failed to get git status");
 
 		// let mut entries = HashMap::new();

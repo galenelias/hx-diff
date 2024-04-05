@@ -95,7 +95,7 @@ fn parse_status(status: &str) -> Result<GitStatus, GitError> {
 			let staged_status = EntryStatus::from_u8(&file_status.as_bytes()[0]);
 			let unstaged_status = EntryStatus::from_u8(&file_status.as_bytes()[1]);
 
-			iter.nth(2); // Skip: file mode for HEAD, index, worktree
+			iter.nth(3); // Skip: file mode for HEAD, index, worktree
 			 // TODO: Handle rename confidence parameter
 
 			let head_sha1 = iter.next().unwrap().to_owned();

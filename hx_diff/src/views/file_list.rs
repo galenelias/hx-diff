@@ -1,9 +1,10 @@
 use crate::*;
-use git_cli_wrap::*;
 use gpui::*;
 use hx_diff::{DraggedPanel, PanelPosition};
 use std::path::PathBuf;
 use theme::ActiveTheme;
+
+use self::workspace::{Entry, EntryKind, ProjectEntryId, Workspace};
 
 const RESIZE_HANDLE_SIZE: Pixels = Pixels(6.);
 
@@ -24,8 +25,8 @@ enum ListItemType {
 #[derive(Debug)]
 struct ListItem {
 	item_type: ListItemType,
+	entry_id: ProjectEntryId,
 	path: PathBuf,
-	is_staged: bool,
 	label: SharedString,
 	status: SharedString,
 }
@@ -34,6 +35,57 @@ pub struct FileList {
 	items: Vec<ListItem>,
 	// hx_diff: WeakView<HxDiff>,
 	model: Model<FileListModel>,
+	workspace: Model<Workspace>,
+}
+
+impl FileList {
+	fn refresh_from_workspace(&mut self, workspace: &Workspace) {
+		println!("FileList::refresh_from_workspace()");
+		self.items = workspace
+			.entries
+			.iter()
+			.map(|entry| {
+				let item_type = match entry.kind {
+					EntryKind::Category(_) => ListItemType::Category,
+					EntryKind::Directory(_) => ListItemType::Directory,
+					EntryKind::File(_) => ListItemType::File,
+				};
+
+				let label: SharedString = match entry.kind {
+					EntryKind::Category(workspace::CategoryKind::Staged) => {
+						"STAGED - Changes to be committed".into()
+					}
+					EntryKind::Category(workspace::CategoryKind::Working) => {
+						"UNSTAGED - Changes not staged for commit".into()
+					}
+					EntryKind::Category(workspace::CategoryKind::Commit) => "TODO".into(),
+					EntryKind::Directory(_) => entry.path.to_string_lossy().into_owned().into(),
+					EntryKind::File(ref name) => entry
+						.path
+						.file_name()
+						.unwrap()
+						.to_string_lossy()
+						.into_owned()
+						.into(),
+				};
+
+				// TODO
+				let status: SharedString = match entry.kind {
+					EntryKind::File(_) => "modified".into(),
+					_ => "".into(),
+				};
+
+				ListItem {
+					item_type,
+					entry_id: entry.id,
+					path: entry.path.clone(),
+					// is_staged: entry.is_staged,
+					label: SharedString::from(label),
+					status,
+				}
+			})
+			.collect();
+	}
 }
 
 pub struct FileListModel {
@@ -41,86 +93,31 @@ pub struct FileListModel {
 }
 
 impl FileList {
-	pub fn new(_hx_diff: WeakView<HxDiff>, cx: &mut WindowContext) -> View<FileList> {
+	pub fn new(
+		_hx_diff: WeakView<HxDiff>,
+		workspace: Model<Workspace>,
+		cx: &mut WindowContext,
+	) -> View<FileList> {
 		let model = cx.new_model(|_cx| FileListModel { width: None });
 
-		let file_list = cx.new_view(|_cx| {
-			let status = git_cli_wrap::get_status().expect("Failed to get git status");
+		let file_list = cx.new_view(|cx| {
+			cx.observe(&workspace, |model: &mut FileList, workspace, cx| {
+				model.refresh_from_workspace(workspace.read(cx));
+				cx.notify();
+			})
+			.detach();
 
-			let mut items = Vec::new();
-
-			let mut process_items = |get_status: fn(&Entry) -> EntryStatus,
-			                         is_staged: bool,
-			                         category_name: &'static str| {
-				let mut has_items = false;
-				let mut last_dir = None;
-
-				for entry in status
-					.entries
-					.iter()
-					.filter(|e| get_status(e) != EntryStatus::None)
-				{
-					let path = &entry.path;
-
-					if !has_items {
-						items.push(ListItem {
-							item_type: ListItemType::Category,
-							path: path.clone().into(),
-							is_staged,
-							label: SharedString::from(category_name),
-							status: "".into(),
-						});
-						has_items = true;
-					}
-					let parent_dir = path.parent().expect(&format!(
-						"Failed to get parent directory for '{}'",
-						entry.path.display()
-					));
-
-					if Some(parent_dir) != last_dir {
-						last_dir = Some(parent_dir);
-						items.push(ListItem {
-							item_type: ListItemType::Directory,
-							path: path.clone(),
-							is_staged,
-							label: parent_dir.to_string_lossy().to_string().into(),
-							status: "".into(),
-						});
-					}
-
-					let status = get_status(entry).to_string();
-					items.push(ListItem {
-						item_type: ListItemType::File,
-						path: path.clone(),
-						is_staged,
-						label: path
-							.file_name()
-							.unwrap()
-							.to_string_lossy()
-							.into_owned()
-							.into(),
-						status: status.into(),
-					});
-				}
-			};
-
-			process_items(
-				|e| e.staged_status,
-				/*is_staged=*/ true,
-				"STAGED - Changes to be committed",
-			);
-			process_items(
-				|e| e.unstaged_status,
-				/*is_staged=*/ false,
-				"WORKING - Changes not staged for commit",
-			);
-
-			Self {
+			let mut file_list = Self {
 				// status,
-				items,
+				items: Vec::new(),
 				// hx_diff,
 				model,
-			}
+				workspace,
+			};
+
+			file_list.refresh_from_workspace(file_list.workspace.read(cx));
+
+			file_list
 		});
 
 		file_list
@@ -141,7 +138,6 @@ impl FileList {
 	) -> ui::ListItem {
 		let item_type = item.item_type;
 		let path = item.path.clone();
-		let is_staged = item.is_staged;
 
 		let indent = match item_type {
 			ListItemType::Category => 0,
@@ -155,11 +151,7 @@ impl FileList {
 			ListItemType::File => cx.theme().colors().text,
 		};
 
-		let id = SharedString::from(format!(
-			"file_list_item_{}_{}",
-			&item.path.to_string_lossy(),
-			is_staged
-		));
+		let id = item.entry_id;
 
 		ui::ListItem::new(index).child(
 			div()
@@ -168,12 +160,12 @@ impl FileList {
 				.w_full()
 				.px_2()
 				.text_color(text_color)
-				.id(id)
+				.id(id.to_usize())
 				.on_click(cx.listener(move |_this, _event: &gpui::ClickEvent, cx| {
 					if item_type == ListItemType::File {
 						cx.emit(FileListEvent::OpenedEntry {
 							filename: path.clone(),
-							is_staged,
+							is_staged: false,
 						});
 					}
 				}))
