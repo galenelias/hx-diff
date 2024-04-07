@@ -2316,6 +2316,7 @@ dependencies = [
  "git_cli_wrap",
  "gpui",
  "settings",
+ "similar",
  "theme",
  "ui",
 ]
@@ -4173,6 +4174,12 @@ checksum = "d8229b473baa5980ac72ef434c4415e70c4b5e71b423043adb4ba059f89c99a1"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "similar"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa42c91313f1d05da9b26f267f931cf178d4aba455b4c4622dd7355eb80c6640"
 
 [[package]]
 name = "simplecss"

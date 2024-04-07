@@ -42,9 +42,9 @@ pub enum CategoryKind {
 }
 
 pub struct FileEntry {
-	path: PathBuf,
-	left_source: FileSource,
-	right_source: FileSource,
+	pub path: PathBuf,
+	pub left_source: FileSource,
+	pub right_source: FileSource,
 }
 
 pub enum EntryKind {
@@ -71,6 +71,11 @@ pub struct Workspace {
 }
 
 impl Workspace {
+	pub fn get_entry(&self, id: ProjectEntryId) -> Option<&Entry> {
+		// TODO: Make this efficient
+		self.entries.iter().find(|entry| entry.id == id)
+	}
+
 	pub fn for_git_status() -> Self {
 		println!("Workspace::for_git_status()");
 		let git_status = git::get_status().expect("Failed to get git status");

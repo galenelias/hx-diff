@@ -153,13 +153,24 @@ pub fn get_diff(path: &std::path::Path, is_staged: bool) -> Result<String, GitEr
 	}
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+pub fn get_file_contents(path: &std::path::Path, sha1: &Sha1Hash) -> Result<String, GitError> {
+	let output = Command::new("git")
+		.arg("cat-file")
+		.arg("--filters")
+		.arg(format!("--path={}", path.display()))
+		.arg(std::str::from_utf8(&sha1.0).unwrap())
+		.output()
+		.expect("failed to execute process");
 
-//     #[test]
-//     fn it_works() {
-//         let result = add(2, 2);
-//         assert_eq!(result, 4);
-//     }
-// }
+	if !output.status.success() {
+		println!("Error: Failed to run git cat-file");
+		println!("---");
+		println!(
+			"{}",
+			String::from_utf8(output.stderr).expect("Invalid utf-8")
+		);
+		return Err(GitError {});
+	}
+
+	Ok(String::from_utf8(output.stdout).expect("Invalid utf-8"))
+}

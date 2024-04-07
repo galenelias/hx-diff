@@ -28,15 +28,12 @@ impl HxDiff {
 		let workspace = cx.new_model(|_cx| Workspace::for_git_status());
 
 		let file_pane = FileList::new(weak_handle.clone(), workspace.clone(), cx);
-		let diff_pane = DiffPane::new(weak_handle.clone(), cx);
+		let diff_pane = DiffPane::new(weak_handle.clone(), workspace.clone(), cx);
 
 		cx.subscribe(&file_pane, {
 			move |hx_diff, _, event, cx| match event {
-				&FileListEvent::OpenedEntry {
-					ref filename,
-					is_staged,
-				} => {
-					hx_diff.open_file(filename, is_staged, cx);
+				&FileListEvent::OpenedEntry { entry_id } => {
+					hx_diff.open_file(entry_id, cx);
 				}
 			}
 		})
@@ -54,14 +51,9 @@ impl HxDiff {
 		self.weak_self.clone()
 	}
 
-	fn open_file(
-		&mut self,
-		filename: &std::path::Path,
-		is_staged: bool,
-		cx: &mut ViewContext<Self>,
-	) {
+	fn open_file(&mut self, id: ProjectEntryId, cx: &mut ViewContext<Self>) {
 		self.diff_pane.update(cx, |diff_pane, cx| {
-			diff_pane.open_diff(filename, is_staged, cx);
+			diff_pane.open_diff(id, cx);
 		});
 	}
 }

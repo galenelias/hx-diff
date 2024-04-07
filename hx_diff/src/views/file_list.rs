@@ -4,13 +4,13 @@ use hx_diff::{DraggedPanel, PanelPosition};
 use std::path::PathBuf;
 use theme::ActiveTheme;
 
-use self::workspace::{Entry, EntryKind, ProjectEntryId, Workspace};
+use self::workspace::{EntryKind, ProjectEntryId, Workspace};
 
 const RESIZE_HANDLE_SIZE: Pixels = Pixels(6.);
 
 #[derive(Debug)]
 pub enum FileListEvent {
-	OpenedEntry { filename: PathBuf, is_staged: bool }, // TODO: flush out to be a full specification of the file/diff
+	OpenedEntry { entry_id: ProjectEntryId },
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -163,10 +163,7 @@ impl FileList {
 				.id(id.to_usize())
 				.on_click(cx.listener(move |_this, _event: &gpui::ClickEvent, cx| {
 					if item_type == ListItemType::File {
-						cx.emit(FileListEvent::OpenedEntry {
-							filename: path.clone(),
-							is_staged: false,
-						});
+						cx.emit(FileListEvent::OpenedEntry { entry_id: id });
 					}
 				}))
 				.child(

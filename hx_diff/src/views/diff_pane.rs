@@ -1,5 +1,8 @@
+use self::workspace::{EntryKind, FileEntry, FileSource, ProjectEntryId, Workspace};
 use crate::*;
+use git_cli_wrap as git;
 use gpui::*;
+use similar::{ChangeTag, TextDiff};
 use theme::{ActiveTheme, ThemeSettings};
 
 enum DiffType {
@@ -14,61 +17,90 @@ struct DiffLine {
 	diff_type: DiffType,
 }
 
-fn process_diff(diff: &str) -> Vec<DiffLine> {
-	let mut lines = Vec::new();
-	for line in diff.lines() {
-		if line.starts_with("+++") || line.starts_with("---") || line.starts_with("@@") {
-			lines.push(DiffLine {
-				text: line.to_string().into(),
-				diff_type: DiffType::Header,
-			});
-		} else if line.starts_with('+') {
-			lines.push(DiffLine {
-				text: line[1..].to_string().into(),
-				diff_type: DiffType::Added,
-			});
-		} else if line.starts_with('-') {
-			lines.push(DiffLine {
-				text: line[1..].to_string().into(),
-				diff_type: DiffType::Removed,
-			});
-		} else {
-			lines.push(DiffLine {
-				text: line[1..].to_string().into(),
-				diff_type: DiffType::Normal,
-			});
-		}
-	}
-	lines
-}
-
 pub struct DiffPane {
 	diff_text: SharedString,
 	diff_lines: Vec<DiffLine>,
+	workspace: Model<Workspace>,
 }
 
 impl DiffPane {
-	pub fn new(_hx_diff: WeakView<HxDiff>, cx: &mut WindowContext) -> View<DiffPane> {
+	pub fn new(
+		_hx_diff: WeakView<HxDiff>,
+		workspace: Model<Workspace>,
+		cx: &mut WindowContext,
+	) -> View<DiffPane> {
 		let file_list = cx.new_view(|_cx| DiffPane {
 			diff_text: SharedString::from("Diff content goes here."),
 			diff_lines: Vec::new(),
+			workspace,
 		});
 
 		file_list
 	}
 
-	pub fn open_diff(
-		&mut self,
-		filename: &std::path::Path,
-		is_staged: bool,
-		_cx: &mut ViewContext<Self>,
-	) {
-		self.diff_text = SharedString::from(
-			git_cli_wrap::get_diff(&filename, is_staged)
-				.expect(&format!("Could not read file: {}.", filename.display())),
-		);
+	pub fn get_file_contents(file_entry: &FileEntry, file_source: &FileSource) -> String {
+		match file_source {
+			FileSource::Working => {
+				println!("Getting contents: Working");
+				std::fs::read_to_string(&file_entry.path).expect("Could not read file.")
+			}
+			FileSource::Index(ref sha1) | FileSource::Head(ref sha1) => {
+				println!("Getting contents: Index");
+				git::get_file_contents(&file_entry.path, sha1).expect("Failed to get Index content")
+			}
+			_ => unreachable!("Invalid file source."),
+		}
+	}
 
-		self.diff_lines = process_diff(&self.diff_text);
+	pub fn open_diff(&mut self, id: ProjectEntryId, _cx: &mut ViewContext<Self>) {
+		let entry = self
+			.workspace
+			.read(_cx)
+			.get_entry(id)
+			.expect("Entry not found.");
+
+		match entry.kind {
+			EntryKind::File(ref file_entry) => {
+				let left_contents =
+					DiffPane::get_file_contents(file_entry, &file_entry.left_source);
+
+				let right_contents =
+					DiffPane::get_file_contents(file_entry, &file_entry.right_source);
+
+				let diff = TextDiff::from_lines(&left_contents, &right_contents);
+				let mut diff_lines = Vec::new();
+				for group in diff.grouped_ops(3) {
+					diff_lines.push(DiffLine {
+						text: "Diff Group".into(),
+						diff_type: DiffType::Header,
+					});
+
+					for op in group {
+						for change in diff.iter_changes(&op) {
+							let diff_type = match change.tag() {
+								ChangeTag::Delete => DiffType::Removed,
+								ChangeTag::Insert => DiffType::Added,
+								ChangeTag::Equal => DiffType::Normal,
+							};
+
+							let text = change;
+
+							diff_lines.push(DiffLine {
+								text: text.value().trim_end().to_string().into(),
+								diff_type,
+							});
+						}
+					}
+				}
+				self.diff_lines = diff_lines;
+			}
+			EntryKind::Directory(_) => {
+				self.diff_text = SharedString::from("Directory diff not supported.");
+			}
+			EntryKind::Category(_) => {
+				self.diff_text = SharedString::from("Category diff not supported.");
+			}
+		}
 	}
 
 	fn render_diff_line(&self, item: &DiffLine, cx: &mut ViewContext<Self>) -> Div {
