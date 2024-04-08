@@ -84,7 +84,7 @@ impl Workspace {
 		let counter = AtomicUsize::new(0);
 		let mut entries = Vec::new();
 
-		let mut process_items = |get_status: fn(&git::Entry) -> git::EntryStatus,
+		let mut process_items = |get_status: fn(&git::StatusEntry) -> git::EntryStatus,
 		                         is_staged: bool,
 		                         category_name: &'static str| {
 			let mut has_items = false;

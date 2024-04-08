@@ -3,12 +3,40 @@ use std::process::Command;
 #[derive(Debug)]
 pub struct GitError {}
 
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
+pub struct Sha1Hash([u8; 40]);
+
+#[derive(Debug)]
+pub struct StatusEntry {
+	pub staged_status: EntryStatus,
+	pub unstaged_status: EntryStatus,
+	// TODO: Add more fields
+	pub head_sha1: Sha1Hash,
+	pub index_sha1: Sha1Hash,
+	pub path: std::path::PathBuf,
+}
+
 #[derive(Debug)]
 pub struct GitStatus {
 	pub branch_oid: String,
 	pub branch_head: String,
-	pub branch_upstrem: String,
-	pub entries: Vec<Entry>,
+	pub branch_upstream: String,
+	pub entries: Vec<StatusEntry>,
+}
+
+#[derive(Debug)]
+pub struct ShowEntry {
+	pub left_status: EntryStatus,
+	pub right_status: EntryStatus,
+	pub left_sha1: Sha1Hash,
+	pub right_sha1: Sha1Hash,
+	pub path: std::path::PathBuf,
+}
+
+#[derive(Debug)]
+pub struct GitShow {
+	pub description: String,
+	pub entries: Vec<StatusEntry>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -45,20 +73,6 @@ impl EntryStatus {
 	}
 }
 
-#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
-pub struct Sha1Hash([u8; 40]);
-
-#[derive(Debug)]
-pub struct Entry {
-	pub staged_status: EntryStatus,
-	pub unstaged_status: EntryStatus,
-	// TODO: Add more fields
-	pub head_sha1: Sha1Hash,
-	pub index_sha1: Sha1Hash,
-	pub path: std::path::PathBuf,
-	pub original_path: Option<String>,
-}
-
 pub fn get_status(/*TODO: More options? */) -> Result<GitStatus, GitError> {
 	let output = Command::new("git")
 		.arg("status")
@@ -77,7 +91,7 @@ pub fn get_status(/*TODO: More options? */) -> Result<GitStatus, GitError> {
 fn parse_status(status: &str) -> Result<GitStatus, GitError> {
 	let mut branch_oid = String::new();
 	let mut branch_head = String::new();
-	let mut branch_upstrem = String::new();
+	let mut branch_upstream = String::new();
 
 	let mut entries = Vec::new();
 
@@ -87,7 +101,7 @@ fn parse_status(status: &str) -> Result<GitStatus, GitError> {
 		} else if line.starts_with("# branch.head ") {
 			branch_head = line[14..].to_string();
 		} else if line.starts_with("# branch.upstream ") {
-			branch_upstrem = line[18..].to_string();
+			branch_upstream = line[18..].to_string();
 		} else if line.starts_with("1 ") {
 			// 1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 ea8c4bf7f35f6f77f75d92ad8ce8349f6e81ddba .gitignore
 			let mut iter = line.split_whitespace().skip(1);
@@ -103,13 +117,12 @@ fn parse_status(status: &str) -> Result<GitStatus, GitError> {
 
 			let path = iter.next().unwrap();
 
-			entries.push(Entry {
+			entries.push(StatusEntry {
 				staged_status,
 				unstaged_status,
 				head_sha1: Sha1Hash(head_sha1.as_bytes().try_into().unwrap()),
 				index_sha1: Sha1Hash(index_sha1.as_bytes().try_into().unwrap()),
 				path: std::path::Path::new(path).canonicalize().unwrap(),
-				original_path: None,
 			});
 		}
 	}
@@ -117,7 +130,7 @@ fn parse_status(status: &str) -> Result<GitStatus, GitError> {
 	Ok(GitStatus {
 		branch_oid,
 		branch_head,
-		branch_upstrem,
+		branch_upstream,
 		entries,
 	})
 }
@@ -173,4 +186,52 @@ pub fn get_file_contents(path: &std::path::Path, sha1: &Sha1Hash) -> Result<Stri
 	}
 
 	Ok(String::from_utf8(output.stdout).expect("Invalid utf-8"))
+}
+
+pub fn show_status(commit: &str) -> Result<GitShow, GitError> {
+	let output = Command::new("git")
+		.arg("show")
+		.arg("abbrev=40")
+		.arg(commit)
+		.output()
+		.expect("failed to execute process");
+
+	if !output.status.success() {
+		println!("Error: Failed to run git show");
+		println!("---");
+		println!(
+			"{}",
+			String::from_utf8(output.stderr).expect("Invalid utf-8")
+		);
+		return Err(GitError {});
+	}
+
+	let output_string = String::from_utf8(output.stdout).expect("Invalid utf-8");
+
+	let mut description = String::new();
+	let mut entries = Vec::new();
+
+	for line in output_string.lines() {
+		if !line.starts_with(':') {
+			description.push_str(line);
+		} else {
+			let mut iter = line[1..].split_whitespace();
+			let _mode1 = iter.next().unwrap();
+			let _mode2 = iter.next().unwrap();
+			let path = iter.next().unwrap();
+
+			entries.push(StatusEntry {
+				staged_status: EntryStatus::None,
+				unstaged_status: EntryStatus::None,
+				head_sha1: Sha1Hash([0; 40]),
+				index_sha1: Sha1Hash([0; 40]),
+				path: std::path::Path::new(path).canonicalize().unwrap(),
+			});
+		}
+	}
+
+	Ok(GitShow {
+		description,
+		entries,
+	})
 }
