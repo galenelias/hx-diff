@@ -58,9 +58,11 @@ impl FileList {
 					EntryKind::Category(workspace::CategoryKind::Working) => {
 						"UNSTAGED - Changes not staged for commit".into()
 					}
-					EntryKind::Category(workspace::CategoryKind::Commit) => "TODO".into(),
+					EntryKind::Category(workspace::CategoryKind::Commit) => {
+						"Commit Details Here".into()
+					}
 					EntryKind::Directory(_) => entry.path.to_string_lossy().into_owned().into(),
-					EntryKind::File(ref name) => entry
+					EntryKind::File(ref _name) => entry
 						.path
 						.file_name()
 						.unwrap()

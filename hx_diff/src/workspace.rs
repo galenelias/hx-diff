@@ -15,10 +15,6 @@ impl ProjectEntryId {
 		Self(counter.fetch_add(1, SeqCst))
 	}
 
-	pub fn to_proto(&self) -> u64 {
-		self.0 as u64
-	}
-
 	pub fn to_usize(&self) -> usize {
 		self.0
 	}
@@ -29,6 +25,7 @@ impl ProjectEntryId {
 
 pub enum FileSource {
 	// TODO, name
+	Empty,
 	Working,
 	Index(git::Sha1Hash),
 	Head(git::Sha1Hash),
@@ -65,6 +62,17 @@ pub struct Entry {
 	// status: String,
 }
 
+pub enum WorkspaceAction {
+	GitStatus,
+	GitShow(String),
+	GitDiff,
+}
+
+pub struct WorkspaceArgs {
+	pub action: WorkspaceAction,
+	pub path: Option<PathBuf>,
+}
+
 pub struct Workspace {
 	// entries: HashMap<ProjectEntryId, Entry>,
 	pub entries: Vec<Entry>,
@@ -74,6 +82,45 @@ impl Workspace {
 	pub fn get_entry(&self, id: ProjectEntryId) -> Option<&Entry> {
 		// TODO: Make this efficient
 		self.entries.iter().find(|entry| entry.id == id)
+	}
+
+	pub fn from_args(args: WorkspaceArgs) -> Self {
+		match args.action {
+			WorkspaceAction::GitStatus => Self::for_git_status(),
+			WorkspaceAction::GitShow(ref sha1) => Self::for_git_show(sha1),
+			WorkspaceAction::GitDiff => unimplemented!(), //Self::for_git_diff(),
+		}
+	}
+
+	pub fn for_git_show(commit: &str) -> Self {
+		let git_show = git::show(commit).expect("Failed to get git show");
+
+		let counter = AtomicUsize::new(0);
+		let mut entries = Vec::new();
+
+		entries.push(Entry {
+			id: ProjectEntryId::new(&counter),
+			kind: EntryKind::Category(CategoryKind::Commit),
+			path: PathBuf::new(),
+		});
+
+		for entry in git_show.entries.iter() {
+			let path = &entry.path;
+			let left_source = FileSource::Commit(entry.left_sha1);
+			let right_source = FileSource::Commit(entry.right_sha1);
+
+			entries.push(Entry {
+				id: ProjectEntryId::new(&counter),
+				kind: EntryKind::File(FileEntry {
+					path: path.clone(),
+					left_source,
+					right_source,
+				}),
+				path: path.clone(),
+			});
+		}
+
+		return Workspace { entries };
 	}
 
 	pub fn for_git_status() -> Self {

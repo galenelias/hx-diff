@@ -22,29 +22,30 @@ pub struct HxDiff {
 }
 
 impl HxDiff {
-	pub fn new(cx: &mut ViewContext<Self>) -> HxDiff {
-		let weak_handle = cx.view().downgrade();
+	pub fn new(workspace: Model<Workspace>, cx: &mut WindowContext) -> View<HxDiff> {
+		let hxdiff_view = cx.new_view(|cx| {
+			let weak_handle = cx.view().downgrade();
 
-		let workspace = cx.new_model(|_cx| Workspace::for_git_status());
+			let file_pane = FileList::new(weak_handle.clone(), workspace.clone(), cx);
+			let diff_pane = DiffPane::new(weak_handle.clone(), workspace.clone(), cx);
 
-		let file_pane = FileList::new(weak_handle.clone(), workspace.clone(), cx);
-		let diff_pane = DiffPane::new(weak_handle.clone(), workspace.clone(), cx);
-
-		cx.subscribe(&file_pane, {
-			move |hx_diff, _, event, cx| match event {
-				&FileListEvent::OpenedEntry { entry_id } => {
-					hx_diff.open_file(entry_id, cx);
+			cx.subscribe(&file_pane, {
+				move |hx_diff, _, event, cx| match event {
+					&FileListEvent::OpenedEntry { entry_id } => {
+						hx_diff.open_file(entry_id, cx);
+					}
 				}
-			}
-		})
-		.detach();
+			})
+			.detach();
 
-		HxDiff {
-			weak_self: weak_handle,
-			file_pane,
-			diff_pane,
-			workspace: workspace.clone(),
-		}
+			HxDiff {
+				weak_self: weak_handle,
+				file_pane,
+				diff_pane,
+				workspace: workspace.clone(),
+			}
+		});
+		hxdiff_view
 	}
 
 	pub fn _weak_handle(&self) -> WeakView<Self> {

@@ -40,11 +40,14 @@ impl DiffPane {
 
 	pub fn get_file_contents(file_entry: &FileEntry, file_source: &FileSource) -> String {
 		match file_source {
+			FileSource::Empty => String::new(),
 			FileSource::Working => {
 				println!("Getting contents: Working");
 				std::fs::read_to_string(&file_entry.path).expect("Could not read file.")
 			}
-			FileSource::Index(ref sha1) | FileSource::Head(ref sha1) => {
+			FileSource::Commit(ref sha1)
+			| FileSource::Index(ref sha1)
+			| FileSource::Head(ref sha1) => {
 				println!("Getting contents: Index");
 				git::get_file_contents(&file_entry.path, sha1).expect("Failed to get Index content")
 			}

@@ -6,6 +6,14 @@ pub struct GitError {}
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub struct Sha1Hash([u8; 40]);
 
+impl Sha1Hash {
+	pub fn from_bytes(bytes: &[u8]) -> Sha1Hash {
+		let mut hash = [0; 40];
+		hash.copy_from_slice(&bytes);
+		Sha1Hash(hash)
+	}
+}
+
 #[derive(Debug)]
 pub struct StatusEntry {
 	pub staged_status: EntryStatus,
@@ -36,7 +44,7 @@ pub struct ShowEntry {
 #[derive(Debug)]
 pub struct GitShow {
 	pub description: String,
-	pub entries: Vec<StatusEntry>,
+	pub entries: Vec<ShowEntry>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -167,6 +175,11 @@ pub fn get_diff(path: &std::path::Path, is_staged: bool) -> Result<String, GitEr
 }
 
 pub fn get_file_contents(path: &std::path::Path, sha1: &Sha1Hash) -> Result<String, GitError> {
+	// Null/Empty file case
+	if sha1 == &Sha1Hash(['0' as u8; 40]) {
+		return Ok("".to_string());
+	}
+
 	let output = Command::new("git")
 		.arg("cat-file")
 		.arg("--filters")
@@ -188,10 +201,11 @@ pub fn get_file_contents(path: &std::path::Path, sha1: &Sha1Hash) -> Result<Stri
 	Ok(String::from_utf8(output.stdout).expect("Invalid utf-8"))
 }
 
-pub fn show_status(commit: &str) -> Result<GitShow, GitError> {
+pub fn show(commit: &str) -> Result<GitShow, GitError> {
 	let output = Command::new("git")
 		.arg("show")
-		.arg("abbrev=40")
+		.arg("--abbrev=40")
+		.arg("--raw")
 		.arg(commit)
 		.output()
 		.expect("failed to execute process");
@@ -218,13 +232,16 @@ pub fn show_status(commit: &str) -> Result<GitShow, GitError> {
 			let mut iter = line[1..].split_whitespace();
 			let _mode1 = iter.next().unwrap();
 			let _mode2 = iter.next().unwrap();
+			let left_sha1 = iter.next().unwrap();
+			let right_sha1 = iter.next().unwrap();
+			let _mode = iter.next().unwrap();
 			let path = iter.next().unwrap();
 
-			entries.push(StatusEntry {
-				staged_status: EntryStatus::None,
-				unstaged_status: EntryStatus::None,
-				head_sha1: Sha1Hash([0; 40]),
-				index_sha1: Sha1Hash([0; 40]),
+			entries.push(ShowEntry {
+				left_status: EntryStatus::None,
+				right_status: EntryStatus::None,
+				left_sha1: Sha1Hash::from_bytes(left_sha1.as_bytes()),
+				right_sha1: Sha1Hash::from_bytes(right_sha1.as_bytes()),
 				path: std::path::Path::new(path).canonicalize().unwrap(),
 			});
 		}
