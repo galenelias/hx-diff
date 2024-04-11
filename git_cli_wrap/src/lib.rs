@@ -12,6 +12,38 @@ impl Sha1Hash {
 		hash.copy_from_slice(&bytes);
 		Sha1Hash(hash)
 	}
+
+	pub fn is_zero(&self) -> bool {
+		self.0.iter().all(|&b| b == '0' as u8)
+	}
+}
+
+#[derive(Debug)]
+pub enum FileStatus {
+	Added,
+	Copy,
+	Deleted,
+	Modified,
+	Renamed,
+	TypeChange,
+	Unmerged,
+}
+
+impl FileStatus {
+	pub fn from_str(status: &str) -> FileStatus {
+		assert!(status.len() == 1);
+		let status_char = status.chars().next().unwrap();
+		match status_char {
+			'A' => FileStatus::Added,
+			'C' => FileStatus::Copy,
+			'D' => FileStatus::Deleted,
+			'M' => FileStatus::Modified,
+			'R' => FileStatus::Renamed,
+			'T' => FileStatus::TypeChange,
+			'U' => FileStatus::Unmerged,
+			_ => panic!("Unknown status: {}", status_char),
+		}
+	}
 }
 
 #[derive(Debug)]
@@ -39,11 +71,39 @@ pub struct ShowEntry {
 	pub left_sha1: Sha1Hash,
 	pub right_sha1: Sha1Hash,
 	pub path: std::path::PathBuf,
+	pub status: FileStatus,
+}
+
+impl ShowEntry {
+	pub fn from_line(line: &str) -> Self {
+		assert!(line.starts_with(':'));
+		let mut iter = line[1..].split_whitespace();
+		let _mode1 = iter.next().unwrap();
+		let _mode2 = iter.next().unwrap();
+		let left_sha1 = iter.next().unwrap();
+		let right_sha1 = iter.next().unwrap();
+		let status = iter.next().unwrap();
+		let path = iter.next().unwrap();
+
+		ShowEntry {
+			left_status: EntryStatus::None,
+			right_status: EntryStatus::None,
+			left_sha1: Sha1Hash::from_bytes(left_sha1.as_bytes()),
+			right_sha1: Sha1Hash::from_bytes(right_sha1.as_bytes()),
+			status: FileStatus::from_str(status),
+			path: std::path::Path::new(path).canonicalize().unwrap(),
+		}
+	}
 }
 
 #[derive(Debug)]
 pub struct GitShow {
 	pub description: String,
+	pub entries: Vec<ShowEntry>,
+}
+
+#[derive(Debug)]
+pub struct GitDiff {
 	pub entries: Vec<ShowEntry>,
 }
 
@@ -143,17 +203,13 @@ fn parse_status(status: &str) -> Result<GitStatus, GitError> {
 	})
 }
 
-pub fn get_diff(path: &std::path::Path, is_staged: bool) -> Result<String, GitError> {
-	let mut cmd = Command::new("git");
-	cmd.arg("diff").arg("-p");
-
-	if is_staged {
-		cmd.arg("--staged");
-	}
-
-	let cmd = cmd.arg("--").arg(path);
-
-	let output = cmd.output().expect("failed to execute process");
+pub fn get_diff() -> Result<GitDiff, GitError> {
+	let output = Command::new("git")
+		.arg("diff")
+		.arg("--abbrev=40")
+		.arg("--raw")
+		.output()
+		.expect("failed to execute process");
 
 	if !output.status.success() {
 		println!("Error: Failed to run git diff");
@@ -167,11 +223,12 @@ pub fn get_diff(path: &std::path::Path, is_staged: bool) -> Result<String, GitEr
 
 	let output_string = String::from_utf8(output.stdout).expect("Invalid utf-8");
 
-	if let Some(body_start) = output_string.find("@@ ") {
-		Ok(output_string[body_start..].to_string())
-	} else {
-		Err(GitError {})
-	}
+	let entries = output_string
+		.lines()
+		.map(ShowEntry::from_line)
+		.collect::<Vec<_>>();
+
+	Ok(GitDiff { entries })
 }
 
 pub fn get_file_contents(path: &std::path::Path, sha1: &Sha1Hash) -> Result<String, GitError> {
@@ -229,21 +286,7 @@ pub fn show(commit: &str) -> Result<GitShow, GitError> {
 		if !line.starts_with(':') {
 			description.push_str(line);
 		} else {
-			let mut iter = line[1..].split_whitespace();
-			let _mode1 = iter.next().unwrap();
-			let _mode2 = iter.next().unwrap();
-			let left_sha1 = iter.next().unwrap();
-			let right_sha1 = iter.next().unwrap();
-			let _mode = iter.next().unwrap();
-			let path = iter.next().unwrap();
-
-			entries.push(ShowEntry {
-				left_status: EntryStatus::None,
-				right_status: EntryStatus::None,
-				left_sha1: Sha1Hash::from_bytes(left_sha1.as_bytes()),
-				right_sha1: Sha1Hash::from_bytes(right_sha1.as_bytes()),
-				path: std::path::Path::new(path).canonicalize().unwrap(),
-			});
+			entries.push(ShowEntry::from_line(line));
 		}
 	}
 

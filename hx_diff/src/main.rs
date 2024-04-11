@@ -43,6 +43,9 @@ struct Args {
 	mode: Option<String>,
 
 	arg: Option<String>,
+
+	#[arg(long = "merge-base")]
+	merge_base: Option<String>,
 }
 
 fn translate_args(args: &Args) -> WorkspaceArgs {
@@ -54,14 +57,17 @@ fn translate_args(args: &Args) -> WorkspaceArgs {
 				.to_string(),
 		),
 		None | Some("status") => WorkspaceAction::GitStatus,
+		Some("diff") => WorkspaceAction::GitDiff,
 		_ => panic!("Invalid mode"),
 	};
 
+	// TODO - flags (merge-base)   Pair<String, String>.  Pair<Enum, String>?
 	WorkspaceArgs { action, path: None }
 }
 
 fn main() {
 	let args = Args::parse();
+	println!("Args = {:?}", args);
 
 	App::new().run(move |cx: &mut AppContext| {
 		let mut store = SettingsStore::default();

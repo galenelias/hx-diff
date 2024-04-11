@@ -2,6 +2,7 @@
 // Including all scanned files, app query parameters, etc.
 use core::sync::atomic::AtomicUsize;
 use core::sync::atomic::Ordering::SeqCst;
+use git::Sha1Hash;
 use git_cli_wrap as git;
 use std::path::PathBuf;
 
@@ -30,6 +31,34 @@ pub enum FileSource {
 	Index(git::Sha1Hash),
 	Head(git::Sha1Hash),
 	Commit(git::Sha1Hash),
+}
+
+impl FileSource {
+	fn commit_or_working(sha1: &git::Sha1Hash) -> Self {
+		if sha1.is_zero() {
+			Self::Working
+		} else {
+			Self::Commit(*sha1)
+		}
+	}
+
+	pub fn left_from_entry(entry: &git::ShowEntry) -> Self {
+		match entry.status {
+			git::FileStatus::Added => Self::Empty,
+			git::FileStatus::Modified => Self::Head(entry.left_sha1),
+			git::FileStatus::Deleted => Self::Commit(entry.left_sha1),
+			_ => panic!("Unhandled"),
+		}
+	}
+
+	pub fn right_from_entry(entry: &git::ShowEntry) -> Self {
+		match entry.status {
+			git::FileStatus::Added => Self::commit_or_working(&entry.right_sha1),
+			git::FileStatus::Modified => Self::commit_or_working(&entry.right_sha1),
+			git::FileStatus::Deleted => Self::Empty,
+			_ => panic!("Unhandled"),
+		}
+	}
 }
 
 pub enum CategoryKind {
@@ -88,8 +117,39 @@ impl Workspace {
 		match args.action {
 			WorkspaceAction::GitStatus => Self::for_git_status(),
 			WorkspaceAction::GitShow(ref sha1) => Self::for_git_show(sha1),
-			WorkspaceAction::GitDiff => unimplemented!(), //Self::for_git_diff(),
+			WorkspaceAction::GitDiff => Self::for_git_diff(), //Self::for_git_diff(),
 		}
+	}
+
+	pub fn for_git_diff() -> Self {
+		let git_diff = git::get_diff().expect("Failed to get git diff");
+
+		let counter = AtomicUsize::new(0);
+		let mut entries = Vec::new();
+
+		entries.push(Entry {
+			id: ProjectEntryId::new(&counter),
+			kind: EntryKind::Category(CategoryKind::Commit),
+			path: PathBuf::new(),
+		});
+
+		for entry in git_diff.entries.iter() {
+			let path = &entry.path;
+			let left_source = FileSource::left_from_entry(&entry);
+			let right_source = FileSource::right_from_entry(&entry);
+
+			entries.push(Entry {
+				id: ProjectEntryId::new(&counter),
+				kind: EntryKind::File(FileEntry {
+					path: path.clone(),
+					left_source,
+					right_source,
+				}),
+				path: path.clone(),
+			});
+		}
+
+		return Workspace { entries };
 	}
 
 	pub fn for_git_show(commit: &str) -> Self {
