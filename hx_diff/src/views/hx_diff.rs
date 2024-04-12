@@ -3,6 +3,8 @@ use gpui::prelude::*;
 use gpui::*;
 use theme::ActiveTheme;
 
+use crate::workspace::*;
+
 #[derive(Clone)]
 pub enum PanelPosition {
 	Left,
@@ -16,45 +18,43 @@ pub struct HxDiff {
 	weak_self: WeakView<Self>,
 	file_pane: View<FileList>,
 	diff_pane: View<DiffPane>,
+	workspace: Model<Workspace>,
 }
 
 impl HxDiff {
-	pub fn new(cx: &mut ViewContext<Self>) -> HxDiff {
-		let weak_handle = cx.view().downgrade();
-		let file_pane = FileList::new(weak_handle.clone(), cx);
-		let diff_pane = DiffPane::new(weak_handle.clone(), cx);
+	pub fn new(workspace: Model<Workspace>, cx: &mut WindowContext) -> View<HxDiff> {
+		let hxdiff_view = cx.new_view(|cx| {
+			let weak_handle = cx.view().downgrade();
 
-		cx.subscribe(&file_pane, {
-			move |hx_diff, _, event, cx| match event {
-				&FileListEvent::OpenedEntry {
-					ref filename,
-					is_staged,
-				} => {
-					hx_diff.open_file(filename, is_staged, cx);
+			let file_pane = FileList::new(weak_handle.clone(), workspace.clone(), cx);
+			let diff_pane = DiffPane::new(weak_handle.clone(), workspace.clone(), cx);
+
+			cx.subscribe(&file_pane, {
+				move |hx_diff, _, event, cx| match event {
+					&FileListEvent::OpenedEntry { entry_id } => {
+						hx_diff.open_file(entry_id, cx);
+					}
 				}
-			}
-		})
-		.detach();
+			})
+			.detach();
 
-		HxDiff {
-			weak_self: weak_handle,
-			file_pane,
-			diff_pane,
-		}
+			HxDiff {
+				weak_self: weak_handle,
+				file_pane,
+				diff_pane,
+				workspace: workspace.clone(),
+			}
+		});
+		hxdiff_view
 	}
 
 	pub fn _weak_handle(&self) -> WeakView<Self> {
 		self.weak_self.clone()
 	}
 
-	fn open_file(
-		&mut self,
-		filename: &std::path::Path,
-		is_staged: bool,
-		cx: &mut ViewContext<Self>,
-	) {
+	fn open_file(&mut self, id: ProjectEntryId, cx: &mut ViewContext<Self>) {
 		self.diff_pane.update(cx, |diff_pane, cx| {
-			diff_pane.open_diff(filename, is_staged, cx);
+			diff_pane.open_diff(id, cx);
 		});
 	}
 }

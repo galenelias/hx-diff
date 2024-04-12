@@ -1,12 +1,14 @@
 mod common;
 mod views;
+mod workspace;
 
 use crate::common::{setup_window, HEIGHT, WIDTH};
+use crate::workspace::*;
 use assets::Assets;
+use clap::Parser;
 use git_cli_wrap;
 use gpui::*;
 use settings::{default_settings, Settings, SettingsStore};
-use std::env;
 use views::*;
 
 actions!(
@@ -34,8 +36,40 @@ fn cycle_theme(cx: &mut AppContext) {
 	cx.refresh()
 }
 
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+	/// Sub-commmand to run
+	mode: Option<String>,
+
+	arg: Option<String>,
+
+	#[arg(long = "merge-base")]
+	merge_base: Option<String>,
+}
+
+fn translate_args(args: &Args) -> WorkspaceArgs {
+	let action = match args.mode.as_deref() {
+		Some("show") => WorkspaceAction::GitShow(
+			args.arg
+				.as_ref()
+				.expect("Missing commit argument for 'show'")
+				.to_string(),
+		),
+		None | Some("status") => WorkspaceAction::GitStatus,
+		Some("diff") => WorkspaceAction::GitDiff,
+		_ => panic!("Invalid mode"),
+	};
+
+	// TODO - flags (merge-base)   Pair<String, String>.  Pair<Enum, String>?
+	WorkspaceArgs { action, path: None }
+}
+
 fn main() {
-	App::new().run(|cx: &mut AppContext| {
+	let args = Args::parse();
+	println!("Args = {:?}", args);
+
+	App::new().run(move |cx: &mut AppContext| {
 		let mut store = SettingsStore::default();
 		store
 			.set_default_settings(default_settings().as_ref(), cx)
@@ -46,18 +80,7 @@ fn main() {
 		theme::init(theme::LoadThemes::All(Box::new(Assets)), cx);
 
 		let theme_registry = theme::ThemeRegistry::global(cx);
-
-		let args: Vec<String> = env::args().collect();
-		let theme_name = if args.len() > 1 {
-			if args[1].chars().all(|c| c.is_ascii_digit()) {
-				let all_themes = theme_registry.list_names(true);
-				all_themes[args[1].parse::<usize>().expect("Invalid theme index")].to_string()
-			} else {
-				args[1].to_string()
-			}
-		} else {
-			"One Dark".to_string()
-		};
+		let theme_name = "One Dark";
 
 		let mut theme_settings = theme::ThemeSettings::get_global(cx).clone();
 		theme_settings.active_theme = theme_registry.get(&theme_name).unwrap();
@@ -99,7 +122,9 @@ fn main() {
 			},
 		]);
 
-		cx.open_window(options, |cx| cx.new_view(HxDiff::new));
+		let workspace = cx.new_model(|_cx| Workspace::from_args(translate_args(&args)));
+
+		cx.open_window(options, |cx| HxDiff::new(workspace, cx));
 		cx.activate(true);
 	});
 }
