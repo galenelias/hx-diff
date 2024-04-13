@@ -38,31 +38,14 @@ fn cycle_theme(cx: &mut AppContext) {
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
-struct Args {
+pub struct Args {
 	/// Sub-commmand to run
-	mode: Option<String>,
+	pub mode: Option<String>,
 
-	arg: Option<String>,
+	pub arg: Option<String>,
 
 	#[arg(long = "merge-base")]
-	merge_base: Option<String>,
-}
-
-fn translate_args(args: &Args) -> WorkspaceArgs {
-	let action = match args.mode.as_deref() {
-		Some("show") => WorkspaceAction::GitShow(
-			args.arg
-				.as_ref()
-				.expect("Missing commit argument for 'show'")
-				.to_string(),
-		),
-		None | Some("status") => WorkspaceAction::GitStatus,
-		Some("diff") => WorkspaceAction::GitDiff,
-		_ => panic!("Invalid mode"),
-	};
-
-	// TODO - flags (merge-base)   Pair<String, String>.  Pair<Enum, String>?
-	WorkspaceArgs { action, path: None }
+	pub merge_base: Option<String>,
 }
 
 fn main() {
@@ -122,7 +105,7 @@ fn main() {
 			},
 		]);
 
-		let workspace = cx.new_model(|_cx| Workspace::from_args(translate_args(&args)));
+		let workspace = cx.new_model(|_cx| Workspace::from_args2(&args));
 
 		cx.open_window(options, |cx| HxDiff::new(workspace, cx));
 		cx.activate(true);

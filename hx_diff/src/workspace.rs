@@ -1,8 +1,8 @@
 // Functions for managing the main state of the application
 // Including all scanned files, app query parameters, etc.
+use crate::Args;
 use core::sync::atomic::AtomicUsize;
 use core::sync::atomic::Ordering::SeqCst;
-use git::Sha1Hash;
 use git_cli_wrap as git;
 use std::path::PathBuf;
 
@@ -20,9 +20,6 @@ impl ProjectEntryId {
 		self.0
 	}
 }
-
-// pub struct Sha1Hash([u8; 40]);
-// pub struct Sha1Hash(String);
 
 pub enum FileSource {
 	// TODO, name
@@ -97,11 +94,6 @@ pub enum WorkspaceAction {
 	GitDiff,
 }
 
-pub struct WorkspaceArgs {
-	pub action: WorkspaceAction,
-	pub path: Option<PathBuf>,
-}
-
 pub struct Workspace {
 	// entries: HashMap<ProjectEntryId, Entry>,
 	pub entries: Vec<Entry>,
@@ -113,11 +105,17 @@ impl Workspace {
 		self.entries.iter().find(|entry| entry.id == id)
 	}
 
-	pub fn from_args(args: WorkspaceArgs) -> Self {
-		match args.action {
-			WorkspaceAction::GitStatus => Self::for_git_status(),
-			WorkspaceAction::GitShow(ref sha1) => Self::for_git_show(sha1),
-			WorkspaceAction::GitDiff => Self::for_git_diff(), //Self::for_git_diff(),
+	pub fn from_args(args: &Args) -> Self {
+		match args.mode.as_deref() {
+			None | Some("status") => Self::for_git_status(),
+			Some("diff") => Self::for_git_diff(),
+			Some("show") => Self::for_git_show(
+				&args
+					.arg
+					.as_ref()
+					.expect("Missing commit argument for 'show'"),
+			),
+			_ => panic!("Invalid mode"),
 		}
 	}
 
