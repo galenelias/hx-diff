@@ -203,13 +203,33 @@ fn parse_status(status: &str) -> Result<GitStatus, GitError> {
 	})
 }
 
-pub fn get_diff() -> Result<GitDiff, GitError> {
-	let output = Command::new("git")
-		.arg("diff")
-		.arg("--abbrev=40")
-		.arg("--raw")
-		.output()
-		.expect("failed to execute process");
+#[derive(Debug, Default)]
+pub struct DiffOptions {
+	pub merge_base: bool,
+	pub cached: bool,
+	pub commit: Option<String>,
+	// pub path: Option<String>, // TODO
+}
+
+pub fn get_diff(options: DiffOptions) -> Result<GitDiff, GitError> {
+	let mut command = Command::new("git");
+	command.arg("diff").arg("--abbrev=40").arg("--raw");
+
+	if options.cached {
+		command.arg("--cached");
+	}
+
+	if options.merge_base {
+		command.arg("--merge-base");
+	}
+
+	if let Some(commit) = options.commit {
+		command.arg(commit);
+	}
+
+	println!("Command: {:?}", command);
+
+	let output = command.output().expect("failed to execute process");
 
 	if !output.status.success() {
 		println!("Error: Failed to run git diff");

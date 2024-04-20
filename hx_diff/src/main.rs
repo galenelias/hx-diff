@@ -44,8 +44,15 @@ pub struct Args {
 
 	pub arg: Option<String>,
 
+	/// diff options
 	#[arg(long = "merge-base")]
-	pub merge_base: Option<String>,
+	pub merge_base: bool,
+
+	#[arg(long, action)]
+	pub cached: bool,
+
+	#[arg(long, action)]
+	pub staged: bool,
 }
 
 fn main() {
@@ -105,7 +112,7 @@ fn main() {
 			},
 		]);
 
-		let workspace = cx.new_model(|_cx| Workspace::from_args2(&args));
+		let workspace = cx.new_model(|_cx| Workspace::from_args(&args));
 
 		cx.open_window(options, |cx| HxDiff::new(workspace, cx));
 		cx.activate(true);

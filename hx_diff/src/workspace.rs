@@ -108,7 +108,7 @@ impl Workspace {
 	pub fn from_args(args: &Args) -> Self {
 		match args.mode.as_deref() {
 			None | Some("status") => Self::for_git_status(),
-			Some("diff") => Self::for_git_diff(),
+			Some("diff") => Self::for_git_diff(args),
 			Some("show") => Self::for_git_show(
 				&args
 					.arg
@@ -119,8 +119,14 @@ impl Workspace {
 		}
 	}
 
-	pub fn for_git_diff() -> Self {
-		let git_diff = git::get_diff().expect("Failed to get git diff");
+	pub fn for_git_diff(args: &Args) -> Self {
+		let diff_options = git::DiffOptions {
+			merge_base: args.merge_base,
+			cached: args.cached || args.staged,
+			commit: args.arg.clone(),
+		};
+
+		let git_diff = git::get_diff(diff_options).expect("Failed to get git diff");
 
 		let counter = AtomicUsize::new(0);
 		let mut entries = Vec::new();
@@ -182,10 +188,8 @@ impl Workspace {
 	}
 
 	pub fn for_git_status() -> Self {
-		println!("Workspace::for_git_status()");
 		let git_status = git::get_status().expect("Failed to get git status");
 
-		// let mut entries = HashMap::new();
 		let counter = AtomicUsize::new(0);
 		let mut entries = Vec::new();
 
@@ -228,7 +232,6 @@ impl Workspace {
 					});
 				}
 
-				// let status = get_status(entry).to_string();
 				let file_entry = FileEntry {
 					path: path.clone(),
 					left_source: if is_staged {
