@@ -51,14 +51,13 @@ impl DiffPane {
 				println!("Getting contents: Index");
 				git::get_file_contents(&file_entry.path, sha1).expect("Failed to get Index content")
 			}
-			_ => unreachable!("Invalid file source."),
 		}
 	}
 
-	pub fn open_diff(&mut self, id: ProjectEntryId, _cx: &mut ViewContext<Self>) {
+	pub fn open_diff(&mut self, id: ProjectEntryId, cx: &mut ViewContext<Self>) {
 		let entry = self
 			.workspace
-			.read(_cx)
+			.read(cx)
 			.get_entry(id)
 			.expect("Entry not found.");
 

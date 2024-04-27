@@ -15,10 +15,10 @@ pub enum PanelPosition {
 pub struct DraggedPanel(pub PanelPosition);
 
 pub struct HxDiff {
-	weak_self: WeakView<Self>,
+	_weak_self: WeakView<Self>,
 	file_pane: View<FileList>,
 	diff_pane: View<DiffPane>,
-	workspace: Model<Workspace>,
+	_workspace: Model<Workspace>,
 }
 
 impl HxDiff {
@@ -39,18 +39,18 @@ impl HxDiff {
 			.detach();
 
 			HxDiff {
-				weak_self: weak_handle,
+				_weak_self: weak_handle,
 				file_pane,
 				diff_pane,
-				workspace: workspace.clone(),
+				_workspace: workspace.clone(),
 			}
 		});
 		hxdiff_view
 	}
 
-	pub fn _weak_handle(&self) -> WeakView<Self> {
-		self.weak_self.clone()
-	}
+	// pub fn _weak_handle(&self) -> WeakView<Self> {
+	// 	self._weak_self.clone()
+	// }
 
 	fn open_file(&mut self, id: ProjectEntryId, cx: &mut ViewContext<Self>) {
 		self.diff_pane.update(cx, |diff_pane, cx| {

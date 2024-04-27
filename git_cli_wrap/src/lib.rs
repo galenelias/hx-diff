@@ -203,7 +203,7 @@ fn parse_status(status: &str) -> Result<GitStatus, GitError> {
 	})
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct DiffOptions {
 	pub merge_base: bool,
 	pub cached: bool,
@@ -211,7 +211,7 @@ pub struct DiffOptions {
 	// pub path: Option<String>, // TODO
 }
 
-pub fn get_diff(options: DiffOptions) -> Result<GitDiff, GitError> {
+pub fn get_diff(options: &DiffOptions) -> Result<GitDiff, GitError> {
 	let mut command = Command::new("git");
 	command.arg("diff").arg("--abbrev=40").arg("--raw");
 
@@ -223,7 +223,7 @@ pub fn get_diff(options: DiffOptions) -> Result<GitDiff, GitError> {
 		command.arg("--merge-base");
 	}
 
-	if let Some(commit) = options.commit {
+	if let Some(commit) = &options.commit {
 		command.arg(commit);
 	}
 
@@ -314,4 +314,47 @@ pub fn show(commit: &str) -> Result<GitShow, GitError> {
 		description,
 		entries,
 	})
+}
+
+pub fn stage_file(path: &str) -> Result<(), GitError> {
+	let output = Command::new("git")
+		.arg("add")
+		.arg("--")
+		.arg(path)
+		.output()
+		.expect("failed to execute process");
+
+	if !output.status.success() {
+		println!("Error: Failed to run git add");
+		println!("---");
+		println!(
+			"{}",
+			String::from_utf8(output.stderr).expect("Invalid utf-8")
+		);
+		return Err(GitError {});
+	}
+
+	Ok(())
+}
+
+pub fn unstage_file(path: &str) -> Result<(), GitError> {
+	let output = Command::new("git")
+		.arg("restore")
+		.arg("--staged")
+		.arg("--")
+		.arg(path)
+		.output()
+		.expect("failed to execute process");
+
+	if !output.status.success() {
+		println!("Error: Failed to run git reset");
+		println!("---");
+		println!(
+			"{}",
+			String::from_utf8(output.stderr).expect("Invalid utf-8")
+		);
+		return Err(GitError {});
+	}
+
+	Ok(())
 }

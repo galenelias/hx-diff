@@ -1,7 +1,10 @@
-1. Global entries list
-2. Staged and Unstaged
-3. Tree structure in file list
+1. (Incremental) Refresh of Workspace.  Cmd+R, and upon stage/unstage
+2. Tree structure in file list
 
-# Git command plan
+# Data model plan
 
-git cat-file --filters --path=<path> <sha1>
+- Core 'Worktree' structure, which contains full state of the operation and results.
+
+- TODO: Respond to changes...
+- Refresh diff_list
+- Create events for (select, revert, etc.)

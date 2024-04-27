@@ -1,4 +1,5 @@
 use crate::*;
+use git_cli_wrap as git;
 use gpui::*;
 use hx_diff::{DraggedPanel, PanelPosition};
 use std::path::PathBuf;
@@ -20,6 +21,11 @@ enum ListItemType {
 	File,
 }
 
+#[derive(Copy, Clone, Debug)]
+struct Selection {
+	entry_id: ProjectEntryId,
+}
+
 // Test - TODO, delete me
 
 #[derive(Debug)]
@@ -36,7 +42,12 @@ pub struct FileList {
 	// hx_diff: WeakView<HxDiff>,
 	model: Model<FileListModel>,
 	workspace: Model<Workspace>,
+	context_menu: Option<(View<ui::ContextMenu>, gpui::Point<Pixels>, Subscription)>,
+	focus_handle: FocusHandle,
+	selection: Option<Selection>,
 }
+
+actions!(file_list, [CopyPath, StageFile, UnstageFile,]);
 
 impl FileList {
 	fn refresh_from_workspace(&mut self, workspace: &Workspace) {
@@ -109,12 +120,17 @@ impl FileList {
 			})
 			.detach();
 
+			let focus_handle = cx.focus_handle();
+
 			let mut file_list = Self {
 				// status,
 				items: Vec::new(),
+				context_menu: None,
+				focus_handle,
 				// hx_diff,
 				model,
 				workspace,
+				selection: None,
 			};
 
 			file_list.refresh_from_workspace(file_list.workspace.read(cx));
@@ -132,6 +148,88 @@ impl FileList {
 		});
 	}
 
+	fn deploy_context_menu(
+		&mut self,
+		position: Point<Pixels>,
+		entry_id: ProjectEntryId,
+		cx: &mut ViewContext<Self>,
+	) {
+		let context_menu = ui::ContextMenu::build(cx, |mut menu, cx| {
+			let workspace = self.workspace.read(cx);
+			let entry = self.workspace.read(cx).get_entry(entry_id);
+
+			self.selection = Some(Selection { entry_id });
+			let entry = match entry {
+				Some(entry) => entry,
+				None => return menu,
+			};
+
+			if workspace.mode == WorkspaceMode::GitStatus {
+				match entry.kind {
+					EntryKind::File(ref file_entry) => match file_entry.right_source {
+						FileSource::Working => {
+							menu = menu.action("Stage File", Box::new(StageFile));
+						}
+						FileSource::Index(_) => {
+							menu = menu.action("Unstage File", Box::new(UnstageFile));
+						}
+						_ => (),
+					},
+					_ => (),
+				}
+			}
+
+			menu = menu.action("Copy Path", Box::new(CopyPath));
+			menu
+		});
+
+		cx.focus_view(&context_menu);
+
+		let subscription =
+			cx.subscribe(&context_menu, |this, _, _: &DismissEvent, cx| {
+				if this.context_menu.as_ref().is_some_and(|context_menu| {
+					context_menu.0.focus_handle(cx).contains_focused(cx)
+				}) {
+					cx.focus_self();
+				}
+				this.context_menu.take();
+				cx.notify();
+			});
+
+		self.context_menu = Some((context_menu, position, subscription));
+	}
+
+	fn selected_entry_handle<'a>(&self, cx: &'a AppContext) -> Option<&'a Entry> {
+		let selection = self.selection?;
+		let entry = self.workspace.read(cx).get_entry(selection.entry_id)?;
+		Some(entry)
+	}
+
+	pub fn selected_entry<'a>(&self, cx: &'a AppContext) -> Option<&'a Entry> {
+		let entry = self.selected_entry_handle(cx)?;
+		Some(entry)
+	}
+
+	fn copy_path(&mut self, _: &CopyPath, cx: &mut ViewContext<Self>) {
+		if let Some(entry) = self.selected_entry(cx) {
+			cx.write_to_clipboard(ClipboardItem::new(entry.path.to_string_lossy().to_string()));
+		}
+	}
+
+	fn stage_file(&mut self, _: &StageFile, cx: &mut ViewContext<Self>) {
+		if let Some(entry) = self.selected_entry(cx) {
+			git::stage_file(&entry.path.to_string_lossy());
+			// TODO: Trigger reload/invalidate workspace
+		}
+	}
+
+	fn unstage_file(&mut self, _: &UnstageFile, cx: &mut ViewContext<Self>) {
+		if let Some(entry) = self.selected_entry(cx) {
+			git::unstage_file(&entry.path.to_string_lossy());
+			// TODO: Trigger reload/invalidate workspace
+		}
+	}
+
 	fn render_entry(
 		&self,
 		item: &ListItem,
@@ -139,7 +237,6 @@ impl FileList {
 		cx: &mut ViewContext<Self>,
 	) -> ui::ListItem {
 		let item_type = item.item_type;
-		let path = item.path.clone();
 
 		let indent = match item_type {
 			ListItemType::Category => 0,
@@ -155,33 +252,47 @@ impl FileList {
 
 		let id = item.entry_id;
 
-		ui::ListItem::new(index).child(
-			div()
-				.flex()
-				.flex_row()
-				.w_full()
-				.px_2()
-				.text_color(text_color)
-				.id(id.to_usize())
-				.on_click(cx.listener(move |_this, _event: &gpui::ClickEvent, cx| {
-					if item_type == ListItemType::File {
-						cx.emit(FileListEvent::OpenedEntry { entry_id: id });
-					}
-				}))
-				.child(
-					div()
-						.ml(indent as f32 * px(12.))
-						.child(item.label.clone())
-						.flex_grow()
-						.text_sm(),
-				)
-				.child(
-					div()
-						.text_color(cx.theme().colors().text_accent)
-						.child(item.status.clone())
-						.text_sm(),
-				),
-		)
+		ui::ListItem::new(index)
+			.child(
+				div()
+					.flex()
+					.flex_row()
+					.w_full()
+					.px_2()
+					.text_color(text_color)
+					.id(id.to_usize())
+					.on_click(cx.listener(move |_this, _event: &gpui::ClickEvent, cx| {
+						if item_type == ListItemType::File {
+							cx.emit(FileListEvent::OpenedEntry { entry_id: id });
+						}
+					}))
+					.child(
+						div()
+							.ml(indent as f32 * px(12.))
+							.child(item.label.clone())
+							.flex_grow()
+							.text_sm(),
+					)
+					.child(
+						div()
+							.text_color(cx.theme().colors().text_accent)
+							.child(item.status.clone())
+							.text_sm(),
+					),
+			)
+			.on_secondary_mouse_down(cx.listener(move |this, event: &MouseDownEvent, cx| {
+				// Stop propagation to prevent the catch-all context menu for the project
+				// panel from being deployed.
+				cx.stop_propagation();
+				this.deploy_context_menu(event.position, id, cx);
+				cx.notify();
+			}))
+	}
+}
+
+impl FocusableView for FileList {
+	fn focus_handle(&self, _cx: &AppContext) -> FocusHandle {
+		self.focus_handle.clone()
 	}
 }
 
@@ -202,6 +313,7 @@ impl Render for FileList {
 				cx.new_view(|_| pane.clone())
 			})
 			.occlude();
+
 		div()
 			.flex()
 			.flex_col()
@@ -211,6 +323,9 @@ impl Render for FileList {
 			.border_color(cx.theme().colors().border)
 			.bg(cx.theme().colors().panel_background)
 			.gap(rems(0.3))
+			.on_action(cx.listener(Self::copy_path))
+			.on_action(cx.listener(Self::stage_file))
+			.on_action(cx.listener(Self::unstage_file))
 			.child(
 				div()
 					.border_b_1()
@@ -231,6 +346,15 @@ impl Render for FileList {
 				.w_full(),
 			)
 			.child(handle)
+			.children(self.context_menu.as_ref().map(|(menu, position, _)| {
+				deferred(
+					anchored()
+						.position(*position)
+						.anchor(gpui::AnchorCorner::TopLeft)
+						.child(menu.clone()),
+				)
+				.with_priority(1)
+			}))
 	}
 }
 

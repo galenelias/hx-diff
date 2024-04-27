@@ -10,7 +10,7 @@ use std::path::PathBuf;
 pub struct ProjectEntryId(usize);
 
 impl ProjectEntryId {
-	pub const MAX: Self = Self(usize::MAX);
+	pub const _MAX: Self = Self(usize::MAX);
 
 	pub fn new(counter: &AtomicUsize) -> Self {
 		Self(counter.fetch_add(1, SeqCst))
@@ -88,14 +88,16 @@ pub struct Entry {
 	// status: String,
 }
 
-pub enum WorkspaceAction {
+#[derive(PartialEq, Clone)]
+pub enum WorkspaceMode {
 	GitStatus,
 	GitShow(String),
-	GitDiff,
+	GitDiff(git::DiffOptions),
 }
 
 pub struct Workspace {
 	// entries: HashMap<ProjectEntryId, Entry>,
+	pub mode: WorkspaceMode,
 	pub entries: Vec<Entry>,
 }
 
@@ -126,7 +128,7 @@ impl Workspace {
 			commit: args.arg.clone(),
 		};
 
-		let git_diff = git::get_diff(diff_options).expect("Failed to get git diff");
+		let git_diff = git::get_diff(&diff_options).expect("Failed to get git diff");
 
 		let counter = AtomicUsize::new(0);
 		let mut entries = Vec::new();
@@ -153,7 +155,10 @@ impl Workspace {
 			});
 		}
 
-		return Workspace { entries };
+		return Workspace {
+			mode: WorkspaceMode::GitDiff(diff_options),
+			entries,
+		};
 	}
 
 	pub fn for_git_show(commit: &str) -> Self {
@@ -184,7 +189,10 @@ impl Workspace {
 			});
 		}
 
-		return Workspace { entries };
+		return Workspace {
+			mode: WorkspaceMode::GitShow(commit.to_owned()),
+			entries,
+		};
 	}
 
 	pub fn for_git_status() -> Self {
@@ -195,7 +203,7 @@ impl Workspace {
 
 		let mut process_items = |get_status: fn(&git::StatusEntry) -> git::EntryStatus,
 		                         is_staged: bool,
-		                         category_name: &'static str| {
+		                         _category_name: &'static str| {
 			let mut has_items = false;
 			let mut last_dir = None;
 
@@ -265,6 +273,9 @@ impl Workspace {
 			"WORKING - Changes not staged for commit",
 		);
 
-		return Workspace { entries };
+		return Workspace {
+			mode: WorkspaceMode::GitStatus,
+			entries,
+		};
 	}
 }
