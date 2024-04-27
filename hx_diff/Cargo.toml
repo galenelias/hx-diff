@@ -11,8 +11,8 @@ git_cli_wrap = { path = "../git_cli_wrap" }
 clap = { version = "4.5.4", features = ["derive"] }
 similar = "2.5.0"
 
-gpui = { git = "https://github.com/zed-industries/zed" }
-theme = { git = "https://github.com/zed-industries/zed" }
-settings = { git = "https://github.com/zed-industries/zed" }
-assets = { git = "https://github.com/zed-industries/zed" }
-ui = { git = "https://github.com/zed-industries/zed" }
+gpui = { git = "https://github.com/zed-industries/zed", rev = "d2569afe662be93c926eed1aeb2b17d050ba90b0" }
+theme = { git = "https://github.com/zed-industries/zed", rev = "d2569afe662be93c926eed1aeb2b17d050ba90b0" }
+settings = { git = "https://github.com/zed-industries/zed", rev = "d2569afe662be93c926eed1aeb2b17d050ba90b0" }
+assets = { git = "https://github.com/zed-industries/zed", rev = "d2569afe662be93c926eed1aeb2b17d050ba90b0" }
+ui = { git = "https://github.com/zed-industries/zed", rev = "d2569afe662be93c926eed1aeb2b17d050ba90b0" }

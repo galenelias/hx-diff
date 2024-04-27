@@ -156,7 +156,7 @@ impl Render for DiffPane {
 			.flex_1()
 			.bg(cx.theme().colors().editor_background)
 			.text_size(settings.buffer_font_size(cx))
-			.font(settings.buffer_font.family.clone())
+			.font_family(settings.buffer_font.family.clone())
 			.child(uniform_list(
 				cx.view().clone(),
 				"entries",
