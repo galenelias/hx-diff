@@ -59,62 +59,65 @@ fn main() {
 	let args = Args::parse();
 	println!("Args = {:?}", args);
 
-	App::new().run(move |cx: &mut AppContext| {
-		let mut store = SettingsStore::default();
-		store
-			.set_default_settings(default_settings().as_ref(), cx)
-			.unwrap();
-		cx.set_global(store);
+	App::new()
+		.with_assets(Assets)
+		.run(move |cx: &mut AppContext| {
+			let mut store = SettingsStore::default();
+			store
+				.set_default_settings(default_settings().as_ref(), cx)
+				.unwrap();
+			cx.set_global(store);
 
-		// theme::init(theme::LoadThemes::JustBase, cx); // Only includes "One Dark"
-		theme::init(theme::LoadThemes::All(Box::new(Assets)), cx);
+			// theme::init(theme::LoadThemes::JustBase, cx); // Only includes "One Dark"
+			theme::init(theme::LoadThemes::All(Box::new(Assets)), cx);
+			Assets.load_fonts(cx);
 
-		let theme_registry = theme::ThemeRegistry::global(cx);
-		let theme_name = "One Dark";
+			let theme_registry = theme::ThemeRegistry::global(cx);
+			let theme_name = "One Dark";
 
-		let mut theme_settings = theme::ThemeSettings::get_global(cx).clone();
-		theme_settings.active_theme = theme_registry.get(&theme_name).unwrap();
-		theme::ThemeSettings::override_global(theme_settings, cx);
+			let mut theme_settings = theme::ThemeSettings::get_global(cx).clone();
+			theme_settings.active_theme = theme_registry.get(&theme_name).unwrap();
+			theme::ThemeSettings::override_global(theme_settings, cx);
 
-		let options = setup_window(WIDTH, HEIGHT, cx);
+			let options = setup_window(WIDTH, HEIGHT, cx);
 
-		cx.on_action(|_act: &Quit, cx| cx.quit());
-		cx.on_action(|_act: &CycleTheme, cx| cycle_theme(cx));
-		cx.on_action(|_act: &DecreaseFontSize, cx| {
-			theme::adjust_font_size(cx, |size| *size -= px(1.0))
+			cx.on_action(|_act: &Quit, cx| cx.quit());
+			cx.on_action(|_act: &CycleTheme, cx| cycle_theme(cx));
+			cx.on_action(|_act: &DecreaseFontSize, cx| {
+				theme::adjust_font_size(cx, |size| *size -= px(1.0))
+			});
+			cx.on_action(|_act: &IncreaseFontSize, cx| {
+				theme::adjust_font_size(cx, |size| *size += px(1.0))
+			});
+			cx.on_action(|_act: &ResetFontSize, cx| theme::reset_font_size(cx));
+
+			cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
+			cx.bind_keys([KeyBinding::new("cmd-t", CycleTheme, None)]);
+			cx.bind_keys([KeyBinding::new("cmd-+", IncreaseFontSize, None)]);
+			cx.bind_keys([KeyBinding::new("cmd--", DecreaseFontSize, None)]);
+			cx.bind_keys([KeyBinding::new("cmd-0", ResetFontSize, None)]);
+
+			cx.set_menus(vec![
+				Menu {
+					name: "",
+					items: vec![
+						MenuItem::action("Quit", Quit),
+						MenuItem::action("Cycle Theme", CycleTheme),
+					],
+				},
+				Menu {
+					name: "View",
+					items: vec![
+						MenuItem::action("Zoom In", IncreaseFontSize),
+						MenuItem::action("Decrease Font", DecreaseFontSize),
+						MenuItem::action("Reset Zoom", ResetFontSize),
+					],
+				},
+			]);
+
+			let workspace = cx.new_model(|_cx| Workspace::from_args(&args));
+
+			cx.open_window(options, |cx| HxDiff::new(workspace, cx));
+			cx.activate(true);
 		});
-		cx.on_action(|_act: &IncreaseFontSize, cx| {
-			theme::adjust_font_size(cx, |size| *size += px(1.0))
-		});
-		cx.on_action(|_act: &ResetFontSize, cx| theme::reset_font_size(cx));
-
-		cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
-		cx.bind_keys([KeyBinding::new("cmd-t", CycleTheme, None)]);
-		cx.bind_keys([KeyBinding::new("cmd-+", IncreaseFontSize, None)]);
-		cx.bind_keys([KeyBinding::new("cmd--", DecreaseFontSize, None)]);
-		cx.bind_keys([KeyBinding::new("cmd-0", ResetFontSize, None)]);
-
-		cx.set_menus(vec![
-			Menu {
-				name: "",
-				items: vec![
-					MenuItem::action("Quit", Quit),
-					MenuItem::action("Cycle Theme", CycleTheme),
-				],
-			},
-			Menu {
-				name: "View",
-				items: vec![
-					MenuItem::action("Zoom In", IncreaseFontSize),
-					MenuItem::action("Decrease Font", DecreaseFontSize),
-					MenuItem::action("Reset Zoom", ResetFontSize),
-				],
-			},
-		]);
-
-		let workspace = cx.new_model(|_cx| Workspace::from_args(&args));
-
-		cx.open_window(options, |cx| HxDiff::new(workspace, cx));
-		cx.activate(true);
-	});
 }
