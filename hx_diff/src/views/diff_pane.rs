@@ -1,9 +1,12 @@
+mod diff_element;
+
 use self::workspace::{EntryKind, FileEntry, FileSource, ProjectEntryId, Workspace};
 use crate::*;
+use diff_element::DiffElement;
 use git_cli_wrap as git;
 use gpui::*;
 use similar::{ChangeTag, TextDiff};
-use theme::{ActiveTheme, ThemeSettings};
+use theme::ActiveTheme;
 
 enum DiffType {
 	Header,
@@ -21,6 +24,7 @@ pub struct DiffPane {
 	diff_text: SharedString,
 	diff_lines: Vec<DiffLine>,
 	workspace: Model<Workspace>,
+	scroll_y: f32,
 }
 
 impl DiffPane {
@@ -33,6 +37,7 @@ impl DiffPane {
 			diff_text: SharedString::from("Diff content goes here."),
 			diff_lines: Vec::new(),
 			workspace,
+			scroll_y: 0.0,
 		});
 
 		file_list
@@ -71,28 +76,42 @@ impl DiffPane {
 
 				let diff = TextDiff::from_lines(&left_contents, &right_contents);
 				let mut diff_lines = Vec::new();
-				for group in diff.grouped_ops(3) {
+				// for group in diff.grouped_ops(3) {
+				// 	diff_lines.push(DiffLine {
+				// 		text: "Diff Group".into(),
+				// 		diff_type: DiffType::Header,
+				// 	});
+
+				// 	for op in group {
+				// 		for change in diff.iter_changes(&op) {
+				// 			let diff_type = match change.tag() {
+				// 				ChangeTag::Delete => DiffType::Removed,
+				// 				ChangeTag::Insert => DiffType::Added,
+				// 				ChangeTag::Equal => DiffType::Normal,
+				// 			};
+
+				// 			let text = change;
+
+				// 			diff_lines.push(DiffLine {
+				// 				text: text.value().trim_end().to_string().into(),
+				// 				diff_type,
+				// 			});
+				// 		}
+				// 	}
+				// }
+				for change in diff.iter_all_changes() {
+					let diff_type = match change.tag() {
+						ChangeTag::Delete => DiffType::Removed,
+						ChangeTag::Insert => DiffType::Added,
+						ChangeTag::Equal => DiffType::Normal,
+					};
+
+					let text = change;
+
 					diff_lines.push(DiffLine {
-						text: "Diff Group".into(),
-						diff_type: DiffType::Header,
+						text: text.value().trim_end().to_string().into(),
+						diff_type,
 					});
-
-					for op in group {
-						for change in diff.iter_changes(&op) {
-							let diff_type = match change.tag() {
-								ChangeTag::Delete => DiffType::Removed,
-								ChangeTag::Insert => DiffType::Added,
-								ChangeTag::Equal => DiffType::Normal,
-							};
-
-							let text = change;
-
-							diff_lines.push(DiffLine {
-								text: text.value().trim_end().to_string().into(),
-								diff_type,
-							});
-						}
-					}
 				}
 				self.diff_lines = diff_lines;
 			}
@@ -148,26 +167,27 @@ impl DiffPane {
 
 impl Render for DiffPane {
 	fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
-		let settings = ThemeSettings::get_global(cx);
+		DiffElement::new(cx.view())
 
-		div()
-			.flex()
-			.flex_col()
-			.flex_1()
-			.bg(cx.theme().colors().editor_background)
-			.text_size(settings.buffer_font_size(cx))
-			.font_family(settings.buffer_font.family.clone())
-			.child(uniform_list(
-				cx.view().clone(),
-				"entries",
-				self.diff_lines.len(),
-				{
-					|this, range, cx| {
-						range
-							.map(|i| this.render_diff_line(&this.diff_lines[i], cx))
-							.collect()
-					}
-				},
-			))
+		// let settings = ThemeSettings::get_global(cx);
+		// div()
+		// 	.flex()
+		// 	.flex_col()
+		// 	.flex_1()
+		// 	.bg(cx.theme().colors().editor_background)
+		// 	.text_size(settings.buffer_font_size(cx))
+		// 	.font_family(settings.buffer_font.family.clone())
+		// 	.child(uniform_list(
+		// 		cx.view().clone(),
+		// 		"entries",
+		// 		self.diff_lines.len(),
+		// 		{
+		// 			|this, range, cx| {
+		// 				range
+		// 					.map(|i| this.render_diff_line(&this.diff_lines[i], cx))
+		// 					.collect()
+		// 			}
+		// 		},
+		// 	))
 	}
 }
