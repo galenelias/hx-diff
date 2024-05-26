@@ -3,13 +3,15 @@ use gpui::*;
 use settings::Settings;
 use theme::{ActiveTheme, ThemeSettings};
 
+use super::DiffType;
+
 // Custom Element for custom rendering of diffs
 pub struct DiffElement {
 	diff_pane: View<DiffPane>,
 }
 
 pub struct DiffLayout {
-	lines: Vec<ShapedLine>,
+	lines: Vec<(ShapedLine, Hsla)>,
 	hitbox: Hitbox,
 	line_height: Pixels,
 }
@@ -37,7 +39,7 @@ impl DiffElement {
 						match delta {
 							ScrollDelta::Lines(_) => (),
 							ScrollDelta::Pixels(point) => {
-								let y = diff_pane.scroll_y + point.y.0 / line_height.0 as f32;
+								let y = diff_pane.scroll_y - point.y.0 / line_height.0 as f32;
 								diff_pane.scroll_y =
 									y.clamp(0.0, diff_pane.diff_lines.len() as f32);
 								_cx.notify();
@@ -92,19 +94,34 @@ impl Element for DiffElement {
 		);
 
 		for i in start_row..max_row {
+			let diff_line = &diff_lines[i];
+
+			let color = match diff_line.diff_type {
+				DiffType::Header => opaque_grey(0.5, 1.0),
+				DiffType::Normal => cx.theme().colors().editor_foreground,
+				DiffType::Added => cx.theme().status().created,
+				DiffType::Removed => cx.theme().status().deleted,
+			};
+
+			let background_color = match diff_line.diff_type {
+				DiffType::Header => cx.theme().colors().editor_background,
+				DiffType::Normal => cx.theme().colors().editor_background,
+				DiffType::Added => cx.theme().status().created_background,
+				DiffType::Removed => cx.theme().status().deleted_background,
+			};
 			let run = TextRun {
-				len: diff_lines[i].text.len(),
+				len: diff_line.text.len(),
 				font: buffer_font.clone(),
-				color: cx.theme().colors().editor_foreground,
-				background_color: None,
+				color,
+				background_color: None, //Some(background_color),
 				underline: None,
 				strikethrough: None,
 			};
 			let shaped_line = cx
 				.text_system()
-				.shape_line(diff_lines[i].text.clone(), font_size, &[run])
+				.shape_line(diff_line.text.clone(), font_size, &[run])
 				.unwrap();
-			lines.push(shaped_line)
+			lines.push((shaped_line, background_color))
 		}
 
 		DiffLayout {
@@ -132,7 +149,11 @@ impl Element for DiffElement {
 		for (i, line) in layout.lines.iter().enumerate() {
 			let y = i as f32 * layout.line_height - (scroll_top % layout.line_height);
 
-			line.paint(bounds.origin + point(px(0.0), y), layout.line_height, cx);
+			let origin = bounds.origin + point(px(0.0), y);
+			let size = size(bounds.size.width, layout.line_height);
+			cx.paint_quad(fill(Bounds { origin, size }, line.1));
+
+			line.0.paint(origin, layout.line_height, cx);
 		}
 		// for (ix, line) in layout.lines.iter().enumerate() {
 		// 	// let y = ix as f32 * line.height;
