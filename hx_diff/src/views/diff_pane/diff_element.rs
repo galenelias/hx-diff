@@ -57,17 +57,26 @@ impl Element for DiffElement {
 	type RequestLayoutState = ();
 	type PrepaintState = DiffLayout;
 
-	fn request_layout(&mut self, cx: &mut WindowContext) -> (gpui::LayoutId, ()) {
+	fn id(&self) -> Option<ElementId> {
+		None
+	}
+
+	fn request_layout(
+		&mut self,
+		_: Option<&GlobalElementId>,
+		cx: &mut WindowContext,
+	) -> (gpui::LayoutId, ()) {
 		let mut style = Style::default();
 		style.size.width = relative(1.).into();
 		style.size.height = relative(1.).into();
-		let layout_id = cx.request_layout(&style, None);
+		let layout_id = cx.request_layout(style, None);
 
 		(layout_id, ())
 	}
 
 	fn prepaint(
 		&mut self,
+		_: Option<&GlobalElementId>,
 		bounds: Bounds<Pixels>,
 		_: &mut Self::RequestLayoutState,
 		cx: &mut WindowContext,
@@ -133,6 +142,7 @@ impl Element for DiffElement {
 
 	fn paint(
 		&mut self,
+		_: Option<&GlobalElementId>,
 		bounds: Bounds<gpui::Pixels>,
 		_: &mut Self::RequestLayoutState,
 		layout: &mut Self::PrepaintState,

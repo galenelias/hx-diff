@@ -10,7 +10,11 @@ pub fn setup_window(app_width: i32, app_height: i32, cx: &mut AppContext) -> Win
 
 	let width = DevicePixels::from(app_width);
 	let height = DevicePixels::from(app_height);
-	options.bounds = Some(Bounds::centered(None, Size { width, height }, cx));
+	options.window_bounds = Some(WindowBounds::Windowed(Bounds::centered(
+		None,
+		Size { width, height },
+		cx,
+	)));
 	options.titlebar = Some(TitlebarOptions {
 		title: Some("HxDiff".into()),
 		..Default::default()
