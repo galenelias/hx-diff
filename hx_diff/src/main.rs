@@ -62,7 +62,7 @@ fn main() {
 	App::new()
 		.with_assets(Assets)
 		.run(move |cx: &mut AppContext| {
-			let mut store = SettingsStore::default();
+			let mut store = SettingsStore::new(cx);
 			store
 				.set_default_settings(default_settings().as_ref(), cx)
 				.unwrap();
@@ -84,12 +84,12 @@ fn main() {
 			cx.on_action(|_act: &Quit, cx| cx.quit());
 			cx.on_action(|_act: &CycleTheme, cx| cycle_theme(cx));
 			cx.on_action(|_act: &DecreaseFontSize, cx| {
-				theme::adjust_font_size(cx, |size| *size -= px(1.0))
+				theme::adjust_buffer_font_size(cx, |size| *size -= px(1.0))
 			});
 			cx.on_action(|_act: &IncreaseFontSize, cx| {
-				theme::adjust_font_size(cx, |size| *size += px(1.0))
+				theme::adjust_buffer_font_size(cx, |size| *size += px(1.0))
 			});
-			cx.on_action(|_act: &ResetFontSize, cx| theme::reset_font_size(cx));
+			cx.on_action(|_act: &ResetFontSize, cx| theme::reset_buffer_font_size(cx));
 
 			cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
 			cx.bind_keys([KeyBinding::new("cmd-t", CycleTheme, None)]);
@@ -99,14 +99,14 @@ fn main() {
 
 			cx.set_menus(vec![
 				Menu {
-					name: "",
+					name: "".into(),
 					items: vec![
 						MenuItem::action("Quit", Quit),
 						MenuItem::action("Cycle Theme", CycleTheme),
 					],
 				},
 				Menu {
-					name: "View",
+					name: "View".into(),
 					items: vec![
 						MenuItem::action("Zoom In", IncreaseFontSize),
 						MenuItem::action("Decrease Font", DecreaseFontSize),

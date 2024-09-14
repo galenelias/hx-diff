@@ -212,7 +212,9 @@ impl FileList {
 
 	fn copy_path(&mut self, _: &CopyPath, cx: &mut ViewContext<Self>) {
 		if let Some(entry) = self.selected_entry(cx) {
-			cx.write_to_clipboard(ClipboardItem::new(entry.path.to_string_lossy().to_string()));
+			cx.write_to_clipboard(ClipboardItem::new_string(
+				entry.path.to_string_lossy().to_string(),
+			));
 		}
 	}
 
@@ -343,7 +345,7 @@ impl Render for FileList {
 							.collect()
 					}
 				})
-				.w_full(),
+				.size_full(),
 			)
 			.child(handle)
 			.children(self.context_menu.as_ref().map(|(menu, position, _)| {
