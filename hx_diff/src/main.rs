@@ -57,7 +57,6 @@ pub struct Args {
 
 fn main() {
 	let args = Args::parse();
-	println!("Args = {:?}", args);
 
 	App::new()
 		.with_assets(Assets)

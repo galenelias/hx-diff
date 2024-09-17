@@ -66,6 +66,8 @@ impl DiffPane {
 			.get_entry(id)
 			.expect("Entry not found.");
 
+		self.scroll_y = 0.;
+
 		match entry.kind {
 			EntryKind::File(ref file_entry) => {
 				let left_contents =
@@ -99,12 +101,19 @@ impl DiffPane {
 				// 		}
 				// 	}
 				// }
+
+				let mut first_change_line = None;
+
 				for change in diff.iter_all_changes() {
 					let diff_type = match change.tag() {
 						ChangeTag::Delete => DiffType::Removed,
 						ChangeTag::Insert => DiffType::Added,
 						ChangeTag::Equal => DiffType::Normal,
 					};
+
+					if first_change_line.is_none() && change.tag() != ChangeTag::Equal {
+						first_change_line = Some(diff_lines.len());
+					}
 
 					let text = change;
 
@@ -114,6 +123,10 @@ impl DiffPane {
 					});
 				}
 				self.diff_lines = diff_lines;
+
+				if let Some(first_change_line) = first_change_line {
+					self.scroll_y = (first_change_line as f32 - 4.).max(0.); // TODO; 30%
+				}
 			}
 			EntryKind::Directory(_) => {
 				self.diff_text = SharedString::from("Directory diff not supported.");
@@ -124,45 +137,45 @@ impl DiffPane {
 		}
 	}
 
-	fn render_diff_line(&self, item: &DiffLine, cx: &mut ViewContext<Self>) -> Div {
-		let color = match item.diff_type {
-			DiffType::Header => opaque_grey(0.5, 1.0),
-			DiffType::Normal => cx.theme().colors().editor_foreground,
-			DiffType::Added => cx.theme().status().created,
-			DiffType::Removed => cx.theme().status().deleted,
-		};
+	// 	fn render_diff_line(&self, item: &DiffLine, cx: &mut ViewContext<Self>) -> Div {
+	// 		let color = match item.diff_type {
+	// 			DiffType::Header => opaque_grey(0.5, 1.0),
+	// 			DiffType::Normal => cx.theme().colors().editor_foreground,
+	// 			DiffType::Added => cx.theme().status().created,
+	// 			DiffType::Removed => cx.theme().status().deleted,
+	// 		};
 
-		let background_color = match item.diff_type {
-			DiffType::Header => cx.theme().colors().editor_background,
-			DiffType::Normal => cx.theme().colors().editor_background,
-			DiffType::Added => cx.theme().status().created_background,
-			DiffType::Removed => cx.theme().status().deleted_background,
-		};
+	// 		let background_color = match item.diff_type {
+	// 			DiffType::Header => cx.theme().colors().editor_background,
+	// 			DiffType::Normal => cx.theme().colors().editor_background,
+	// 			DiffType::Added => cx.theme().status().created_background,
+	// 			DiffType::Removed => cx.theme().status().deleted_background,
+	// 		};
 
-		div()
-			.flex()
-			.flex_row()
-			.flex_grow()
-			.w_full()
-			.bg(background_color)
-			.pl_3()
-			// .border_t_width(px(3.))
-			// .border_color(cx.theme().colors().editor_background)
-			// .when_some(border, |el, border| {
-			// 	el.border_t_width(border)
-			// 		.border_color(cx.theme().colors().border)
-			// })
-			.hover(|s| s.bg(cx.theme().colors().element_hover))
-			.child(
-				div()
-					.flex()
-					.flex_grow()
-					.flex_nowrap()
-					.overflow_x_hidden()
-					.text_color(color)
-					.child(item.text.clone()),
-			)
-	}
+	// 		div()
+	// 			.flex()
+	// 			.flex_row()
+	// 			.flex_grow()
+	// 			.w_full()
+	// 			.bg(background_color)
+	// 			.pl_3()
+	// 			// .border_t_width(px(3.))
+	// 			// .border_color(cx.theme().colors().editor_background)
+	// 			// .when_some(border, |el, border| {
+	// 			// 	el.border_t_width(border)
+	// 			// 		.border_color(cx.theme().colors().border)
+	// 			// })
+	// 			.hover(|s| s.bg(cx.theme().colors().element_hover))
+	// 			.child(
+	// 				div()
+	// 					.flex()
+	// 					.flex_grow()
+	// 					.flex_nowrap()
+	// 					.overflow_x_hidden()
+	// 					.text_color(color)
+	// 					.child(item.text.clone()),
+	// 			)
+	// 	}
 }
 
 impl Render for DiffPane {
