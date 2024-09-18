@@ -1,10 +1,11 @@
+use super::DiffType;
+use crate::diff_pane::DiffLine;
+use crate::diff_pane::GutterDimensions;
 use crate::DiffPane;
 use gpui::*;
 use settings::Settings;
+use std::fmt::Write;
 use theme::{ActiveTheme, ThemeSettings};
-
-use super::DiffType;
-
 // Custom Element for custom rendering of diffs
 pub struct DiffElement {
 	diff_pane: View<DiffPane>,
@@ -12,8 +13,11 @@ pub struct DiffElement {
 
 pub struct DiffLayout {
 	lines: Vec<(ShapedLine, Hsla)>,
-	hitbox: Hitbox,
+	gutter_hitbox: Hitbox,
+	gutter_dimensions: GutterDimensions,
+	text_hitbox: Hitbox,
 	line_height: Pixels,
+	line_numbers: Vec<ShapedLine>,
 }
 
 impl DiffElement {
@@ -23,13 +27,54 @@ impl DiffElement {
 		}
 	}
 
+	fn layout_line_numbers(
+		&self,
+		rows: std::ops::Range<usize>,
+		diff_lines: &[DiffLine],
+		cx: &mut WindowContext,
+	) -> Vec<ShapedLine> {
+		let diff_pane = self.diff_pane.clone();
+		let show_line_numbers = diff_pane.read(cx).show_line_numbers;
+
+		if show_line_numbers {
+			let mut scratch_string = String::new();
+			let settings = ThemeSettings::get_global(cx);
+			let buffer_font = settings.buffer_font.clone();
+			let color = cx.theme().colors().editor_line_number;
+			let font_size = settings.buffer_font_size(cx);
+
+			rows.map(|ix| {
+				let diff_line = &diff_lines[ix];
+				scratch_string.clear();
+				if let Some(new_index) = diff_line.new_index {
+					write!(&mut scratch_string, "{}", new_index).unwrap();
+				}
+
+				let run = TextRun {
+					len: scratch_string.len(),
+					font: buffer_font.clone(),
+					color,
+					background_color: None,
+					underline: None,
+					strikethrough: None,
+				};
+				cx.text_system()
+					.shape_line(scratch_string.clone().into(), font_size, &[run])
+					.unwrap()
+			})
+			.collect()
+		} else {
+			Vec::new()
+		}
+	}
+
 	fn paint_mouse_listeners(&mut self, layout: &mut DiffLayout, cx: &mut WindowContext) {
 		let diff_pane = self.diff_pane.clone();
 		let line_height = layout.line_height;
 
 		cx.on_mouse_event({
 			let mut delta = ScrollDelta::default();
-			let hitbox = layout.hitbox.clone();
+			let hitbox = layout.text_hitbox.clone();
 
 			move |event: &ScrollWheelEvent, phase, cx| {
 				if phase == DispatchPhase::Bubble && hitbox.is_hovered(cx) {
@@ -90,9 +135,7 @@ impl Element for DiffElement {
 			.to_pixels(font_size.into(), cx.rem_size())
 			.round();
 
-		let hitbox = cx.insert_hitbox(bounds, false);
-
-		let diff_lines = &self.diff_pane.read(cx).diff_lines;
+		let diff_lines = &self.diff_pane.read(cx).diff_lines.clone(); // TODO: How to not clone?
 		let scroll_y = self.diff_pane.read(cx).scroll_y;
 
 		let start_row = scroll_y as usize;
@@ -101,6 +144,25 @@ impl Element for DiffElement {
 			(scroll_y + height_in_lines).ceil() as usize,
 			diff_lines.len(),
 		);
+
+		let gutter_dimensions = self.diff_pane.read(cx).get_gutter_dimensions(cx);
+		let gutter_bounds = Bounds {
+			origin: bounds.origin,
+			size: size(gutter_dimensions.width, bounds.size.height),
+		};
+		let gutter_hitbox = cx.insert_hitbox(gutter_bounds, false);
+		let text_hitbox = cx.insert_hitbox(
+			Bounds {
+				origin: gutter_bounds.upper_right(),
+				size: size(
+					bounds.size.width - gutter_dimensions.width,
+					bounds.size.height,
+				),
+			},
+			false,
+		);
+
+		let line_numbers = self.layout_line_numbers(start_row..max_row, diff_lines, cx);
 
 		for i in start_row..max_row {
 			let diff_line = &diff_lines[i];
@@ -122,7 +184,7 @@ impl Element for DiffElement {
 				len: diff_line.text.len(),
 				font: buffer_font.clone(),
 				color,
-				background_color: None, //Some(background_color),
+				background_color: None,
 				underline: None,
 				strikethrough: None,
 			};
@@ -135,8 +197,11 @@ impl Element for DiffElement {
 
 		DiffLayout {
 			lines,
-			hitbox,
+			gutter_hitbox,
+			gutter_dimensions,
+			text_hitbox,
 			line_height,
+			line_numbers,
 		}
 	}
 
@@ -156,22 +221,32 @@ impl Element for DiffElement {
 		let scroll_y = self.diff_pane.read(cx).scroll_y;
 		let scroll_top = scroll_y * layout.line_height;
 
+		for (i, line_number) in layout.line_numbers.iter().enumerate() {
+			let y = i as f32 * layout.line_height - (scroll_top % layout.line_height);
+
+			let origin = bounds.origin
+				+ point(
+					layout.gutter_dimensions.width
+						- layout.gutter_dimensions.right_padding
+						- line_number.width,
+					y,
+				);
+			line_number
+				.paint(origin, layout.line_height, cx)
+				.expect("Failed to paint line number");
+		}
+
 		for (i, line) in layout.lines.iter().enumerate() {
 			let y = i as f32 * layout.line_height - (scroll_top % layout.line_height);
 
-			let origin = bounds.origin + point(px(0.0), y);
+			let origin = bounds.origin + point(layout.gutter_dimensions.width, y);
 			let size = size(bounds.size.width, layout.line_height);
 			cx.paint_quad(fill(Bounds { origin, size }, line.1));
 
-			line.0.paint(origin, layout.line_height, cx);
+			line.0
+				.paint(origin, layout.line_height, cx)
+				.expect("Failed to paint line");
 		}
-		// for (ix, line) in layout.lines.iter().enumerate() {
-		// 	// let y = ix as f32 * line.height;
-		// 	let line_origin = bounds.origin + point(px(0.0), ix as f32 * layout.line_height);
-
-		// 	line.paint(line_origin, layout.line_height, cx);
-		// }
-		// });
 	}
 }
 

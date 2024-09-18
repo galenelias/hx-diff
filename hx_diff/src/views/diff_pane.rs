@@ -6,8 +6,9 @@ use diff_element::DiffElement;
 use git_cli_wrap as git;
 use gpui::*;
 use similar::{ChangeTag, TextDiff};
-use theme::ActiveTheme;
+use theme::ThemeSettings;
 
+#[derive(Clone)]
 enum DiffType {
 	Header,
 	Normal,
@@ -15,15 +16,26 @@ enum DiffType {
 	Removed,
 }
 
-struct DiffLine {
-	text: SharedString,
-	diff_type: DiffType,
+#[derive(Clone)]
+pub struct DiffLine {
+	pub text: SharedString,
+	pub diff_type: DiffType,
+	pub old_index: Option<usize>,
+	pub new_index: Option<usize>,
+}
+
+#[derive(Clone)]
+pub struct GutterDimensions {
+	pub left_padding: Pixels,
+	pub right_padding: Pixels,
+	pub width: Pixels,
 }
 
 pub struct DiffPane {
 	diff_text: SharedString,
 	diff_lines: Vec<DiffLine>,
 	workspace: Model<Workspace>,
+	show_line_numbers: bool,
 	scroll_y: f32,
 }
 
@@ -37,6 +49,7 @@ impl DiffPane {
 			diff_text: SharedString::from("Diff content goes here."),
 			diff_lines: Vec::new(),
 			workspace,
+			show_line_numbers: true,
 			scroll_y: 0.0,
 		});
 
@@ -120,6 +133,8 @@ impl DiffPane {
 					diff_lines.push(DiffLine {
 						text: text.value().trim_end().to_string().into(),
 						diff_type,
+						old_index: change.old_index(),
+						new_index: change.new_index(),
 					});
 				}
 				self.diff_lines = diff_lines;
@@ -133,6 +148,37 @@ impl DiffPane {
 			}
 			EntryKind::Category(_) => {
 				self.diff_text = SharedString::from("Category diff not supported.");
+			}
+		}
+	}
+
+	fn get_gutter_dimensions(&self, cx: &AppContext) -> GutterDimensions {
+		if self.show_line_numbers {
+			let settings = ThemeSettings::get_global(cx);
+			let buffer_font = settings.buffer_font.clone();
+			let font_size = settings.buffer_font_size(cx);
+			let font_id = cx.text_system().resolve_font(&buffer_font);
+
+			let em_advance = cx
+				.text_system()
+				.advance(font_id, font_size, 'm')
+				.unwrap()
+				.width;
+
+			let line_count = self.diff_lines.len() as f32;
+			let chars = line_count.log10();
+			let left_padding = em_advance;
+			let right_padding = em_advance;
+			GutterDimensions {
+				width: chars * em_advance + left_padding + right_padding,
+				left_padding,
+				right_padding,
+			}
+		} else {
+			GutterDimensions {
+				width: px(0.),
+				left_padding: px(0.),
+				right_padding: px(0.),
 			}
 		}
 	}
