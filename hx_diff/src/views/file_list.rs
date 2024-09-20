@@ -232,6 +232,10 @@ impl FileList {
 		}
 	}
 
+	fn refresh_list(&mut self, _: &RefreshFileList, _cx: &mut ViewContext<Self>) {
+		println!("FileList: Refresh File List!");
+	}
+
 	fn render_entry(
 		&self,
 		item: &ListItem,
@@ -328,6 +332,8 @@ impl Render for FileList {
 			.on_action(cx.listener(Self::copy_path))
 			.on_action(cx.listener(Self::stage_file))
 			.on_action(cx.listener(Self::unstage_file))
+			.on_action(cx.listener(Self::refresh_list))
+			// .track_focus(&self.focus_handle) // TODO: Re-enable when focus handling is fixed
 			.child(
 				div()
 					.border_b_1()

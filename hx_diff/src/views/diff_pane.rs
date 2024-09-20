@@ -8,6 +8,8 @@ use gpui::*;
 use similar::{ChangeTag, TextDiff};
 use theme::ThemeSettings;
 
+actions!(diff_pane, [NextDifference]);
+
 #[derive(Clone)]
 pub enum DiffType {
 	_Header,
@@ -37,6 +39,7 @@ pub struct DiffPane {
 	workspace: Model<Workspace>,
 	show_line_numbers: bool,
 	scroll_y: f32,
+	focus_handle: FocusHandle,
 }
 
 impl DiffPane {
@@ -45,12 +48,20 @@ impl DiffPane {
 		workspace: Model<Workspace>,
 		cx: &mut WindowContext,
 	) -> View<DiffPane> {
+		let focus_handle = cx.focus_handle();
+
+		cx.on_focus_in(&focus_handle, |_cx| {
+			println!("Focus in diff_pane");
+		})
+		.detach();
+
 		let file_list = cx.new_view(|_cx| DiffPane {
 			diff_text: SharedString::from("Diff content goes here."),
 			diff_lines: Vec::new(),
 			workspace,
 			show_line_numbers: true,
 			scroll_y: 0.0,
+			focus_handle,
 		});
 
 		file_list
@@ -181,6 +192,17 @@ impl DiffPane {
 				right_padding: px(0.),
 			}
 		}
+	}
+
+	fn next_difference(&mut self, _: &NextDifference, _cx: &mut ViewContext<Self>) {
+		println!("DiffPane: NextDifference");
+	}
+}
+
+impl FocusableView for DiffPane {
+	fn focus_handle(&self, _cx: &AppContext) -> FocusHandle {
+		// println!("DiffPane::focus_handle");
+		self.focus_handle.clone()
 	}
 }
 

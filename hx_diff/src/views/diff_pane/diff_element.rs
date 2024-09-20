@@ -1,4 +1,5 @@
 use super::DiffType;
+use crate::diff_pane;
 use crate::diff_pane::DiffLine;
 use crate::diff_pane::GutterDimensions;
 use crate::DiffPane;
@@ -6,6 +7,23 @@ use gpui::*;
 use settings::Settings;
 use std::fmt::Write;
 use theme::{ActiveTheme, ThemeSettings};
+
+pub fn register_action<T: Action>(
+	view: &View<DiffPane>,
+	cx: &mut WindowContext,
+	listener: impl Fn(&mut DiffPane, &T, &mut ViewContext<DiffPane>) + 'static,
+) {
+	let view = view.clone();
+	cx.on_action(std::any::TypeId::of::<T>(), move |action, phase, cx| {
+		let action = action.downcast_ref().unwrap();
+		if phase == DispatchPhase::Bubble {
+			view.update(cx, |editor, cx| {
+				listener(editor, action, cx);
+			})
+		}
+	})
+}
+
 // Custom Element for custom rendering of diffs
 pub struct DiffElement {
 	diff_pane: View<DiffPane>,
@@ -96,6 +114,15 @@ impl DiffElement {
 			}
 		});
 	}
+
+	fn register_actions(&self, cx: &mut WindowContext) {
+		let view = &self.diff_pane;
+
+		// TODO: Maybe move this out to HxDiff.
+		register_action(view, cx, DiffPane::next_difference);
+
+		cx.bind_keys([KeyBinding::new("f8", diff_pane::NextDifference, None)]);
+	}
 }
 
 impl Element for DiffElement {
@@ -137,6 +164,9 @@ impl Element for DiffElement {
 
 		let diff_lines = &self.diff_pane.read(cx).diff_lines.clone(); // TODO: How to not clone?
 		let scroll_y = self.diff_pane.read(cx).scroll_y;
+
+		let focus_handle = self.diff_pane.focus_handle(cx);
+		cx.set_focus_handle(&focus_handle);
 
 		let start_row = scroll_y as usize;
 		let height_in_lines = bounds.size.height / line_height;
@@ -214,6 +244,9 @@ impl Element for DiffElement {
 		cx: &mut WindowContext,
 	) {
 		self.paint_mouse_listeners(layout, cx);
+
+		// I guess GPUI registers action on every 'frame'... weird.
+		self.register_actions(cx);
 
 		// cx.with_text_style(Some(text_style), |cx| {
 		cx.paint_quad(fill(bounds, cx.theme().colors().editor_background));

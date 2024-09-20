@@ -16,6 +16,7 @@ actions!(
 	[
 		Quit,
 		CycleTheme,
+		RefreshFileList,
 		IncreaseFontSize,
 		DecreaseFontSize,
 		ResetFontSize
@@ -95,6 +96,7 @@ fn main() {
 			cx.bind_keys([KeyBinding::new("cmd-+", IncreaseFontSize, None)]);
 			cx.bind_keys([KeyBinding::new("cmd--", DecreaseFontSize, None)]);
 			cx.bind_keys([KeyBinding::new("cmd-0", ResetFontSize, None)]);
+			cx.bind_keys([KeyBinding::new("cmd-r", RefreshFileList, None)]);
 
 			cx.set_menus(vec![
 				Menu {
@@ -110,6 +112,8 @@ fn main() {
 						MenuItem::action("Zoom In", IncreaseFontSize),
 						MenuItem::action("Decrease Font", DecreaseFontSize),
 						MenuItem::action("Reset Zoom", ResetFontSize),
+						MenuItem::separator(),
+						MenuItem::action("Refresh File List", RefreshFileList),
 					],
 				},
 			]);

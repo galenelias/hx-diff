@@ -38,6 +38,10 @@ impl HxDiff {
 			})
 			.detach();
 
+			//cx.bind_keys([KeyBinding::new("cmd-r", RefreshFileList, None)]);
+
+			cx.focus_view(&diff_pane);
+
 			HxDiff {
 				_weak_self: weak_handle,
 				file_pane,
@@ -57,6 +61,10 @@ impl HxDiff {
 			diff_pane.open_diff(id, cx);
 		});
 	}
+
+	fn refresh_list(&mut self, _: &RefreshFileList, _cx: &mut ViewContext<Self>) {
+		println!("HxDiff: Refresh File List!");
+	}
 }
 
 impl Render for HxDiff {
@@ -66,6 +74,7 @@ impl Render for HxDiff {
 			.flex()
 			.flex_col()
 			.text_color(cx.theme().colors().text)
+			.on_action(cx.listener(Self::refresh_list))
 			.child(
 				div() // main status bar
 					.flex_grow()
@@ -97,6 +106,12 @@ impl Render for HxDiff {
 		// 		.child("Status Bar"),
 
 		// )
+	}
+}
+
+impl FocusableView for HxDiff {
+	fn focus_handle(&self, cx: &AppContext) -> FocusHandle {
+		self.diff_pane.focus_handle(cx)
 	}
 }
 
