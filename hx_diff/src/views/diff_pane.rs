@@ -8,7 +8,7 @@ use gpui::*;
 use similar::{ChangeTag, TextDiff};
 use theme::ThemeSettings;
 
-actions!(diff_pane, [NextDifference]);
+actions!(diff_pane, [PreviousDifference, NextDifference]);
 
 #[derive(Clone, PartialEq, Copy)]
 pub enum DiffType {
@@ -31,6 +31,11 @@ pub struct GutterDimensions {
 	// pub left_padding: Pixels,
 	pub right_padding: Pixels,
 	pub width: Pixels,
+}
+
+enum MoveDirection {
+	Up,
+	Down,
 }
 
 pub struct DiffStyle {
@@ -168,7 +173,7 @@ impl DiffPane {
 				self.diff_lines = diff_lines;
 
 				if let Some(first_change_line) = first_change_line {
-					self.scroll_to(first_change_line);
+					self.scroll_to(first_change_line, cx);
 				}
 			}
 			EntryKind::Directory(_) => {
@@ -211,9 +216,21 @@ impl DiffPane {
 		}
 	}
 
-	fn scroll_to(&mut self, index: usize) {
-		self.scroll_y = (index as f32 - 4.).max(0.); // TODO; 30%
+	fn scroll_to(&mut self, index: usize, cx: &mut ViewContext<Self>) {
 		self.selection = Some(index);
+
+		let line_height = self.get_line_height(cx);
+		let height_in_lines = self.last_bounds.unwrap().size.height / line_height;
+		const SCROLL_THRESHOLD: f32 = 0.25;
+		let scroll_threshold = height_in_lines * SCROLL_THRESHOLD;
+
+		// Don't scroll if destination line is comfortably visible
+		let index_float = index as f32;
+		if index_float < self.scroll_y + scroll_threshold {
+			self.scroll_y = (index_float - height_in_lines + scroll_threshold).max(0.);
+		} else if index_float > self.scroll_y + height_in_lines - scroll_threshold {
+			self.scroll_y = (index_float - scroll_threshold).max(0.);
+		}
 	}
 
 	fn get_line_height(&self, cx: &mut ViewContext<Self>) -> Pixels {
@@ -225,31 +242,30 @@ impl DiffPane {
 			.round()
 	}
 
-	fn next_difference(&mut self, _: &NextDifference, cx: &mut ViewContext<Self>) {
-		println!("Next Difference");
-		let diff_index = self.selection.unwrap_or(0);
+	fn jump_to_next_difference<R>(&mut self, remaining_lines: R, cx: &mut ViewContext<Self>)
+	where
+		R: Iterator<Item = usize>,
+	{
 		let mut in_original_diff = true;
-		let mut scroll_dest = None;
-
-		let line_height = self.get_line_height(cx);
-		let height_in_lines = self.last_bounds.unwrap().size.height / line_height;
-		// Don't scroll if destination line is comfortably visible
-
-		for index in diff_index..self.diff_lines.len() {
+		for index in remaining_lines {
 			let diff_type = self.diff_lines[index].diff_type;
 			if in_original_diff && diff_type == DiffType::Normal {
 				in_original_diff = false;
 			} else if !in_original_diff && diff_type != DiffType::Normal {
-				scroll_dest = Some(index);
+				self.scroll_to(index, cx);
 				break;
 			}
 		}
+	}
 
-		if let Some(scroll_dest) = scroll_dest {
-			self.scroll_to(scroll_dest);
-		} else {
-			// Ding!
-		}
+	fn previous_difference(&mut self, _: &PreviousDifference, cx: &mut ViewContext<Self>) {
+		let diff_index = self.selection.unwrap_or(0);
+		self.jump_to_next_difference((0..=diff_index).rev(), cx);
+	}
+
+	fn next_difference(&mut self, _: &NextDifference, cx: &mut ViewContext<Self>) {
+		let diff_index = self.selection.unwrap_or(0);
+		self.jump_to_next_difference((diff_index..self.diff_lines.len()), cx);
 	}
 }
 

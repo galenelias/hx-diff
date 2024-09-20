@@ -114,8 +114,6 @@ impl DiffElement {
 		let click_y = (event.position.y - text_hitbox.top()) / line_height;
 		let final_y = click_y + diff_pane.scroll_y;
 
-		println!("Clicked on line: {}", final_y as usize);
-
 		diff_pane.selection = Some(final_y as usize);
 
 		cx.stop_propagation();
@@ -172,7 +170,9 @@ impl DiffElement {
 
 		// TODO: Maybe move this out to HxDiff.
 		register_action(view, cx, DiffPane::next_difference);
+		register_action(view, cx, DiffPane::previous_difference);
 
+		cx.bind_keys([KeyBinding::new("f7", diff_pane::PreviousDifference, None)]);
 		cx.bind_keys([KeyBinding::new("f8", diff_pane::NextDifference, None)]);
 	}
 }
