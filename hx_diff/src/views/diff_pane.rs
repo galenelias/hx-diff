@@ -9,8 +9,8 @@ use similar::{ChangeTag, TextDiff};
 use theme::ThemeSettings;
 
 #[derive(Clone)]
-enum DiffType {
-	Header,
+pub enum DiffType {
+	_Header,
 	Normal,
 	Added,
 	Removed,
@@ -20,13 +20,13 @@ enum DiffType {
 pub struct DiffLine {
 	pub text: SharedString,
 	pub diff_type: DiffType,
-	pub old_index: Option<usize>,
+	pub _old_index: Option<usize>,
 	pub new_index: Option<usize>,
 }
 
 #[derive(Clone)]
 pub struct GutterDimensions {
-	pub left_padding: Pixels,
+	// pub left_padding: Pixels,
 	pub right_padding: Pixels,
 	pub width: Pixels,
 }
@@ -133,7 +133,7 @@ impl DiffPane {
 					diff_lines.push(DiffLine {
 						text: text.value().trim_end().to_string().into(),
 						diff_type,
-						old_index: change.old_index(),
+						_old_index: change.old_index(),
 						new_index: change.new_index(),
 					});
 				}
@@ -171,13 +171,13 @@ impl DiffPane {
 			let right_padding = em_advance;
 			GutterDimensions {
 				width: chars * em_advance + left_padding + right_padding,
-				left_padding,
+				// left_padding,
 				right_padding,
 			}
 		} else {
 			GutterDimensions {
 				width: px(0.),
-				left_padding: px(0.),
+				// left_padding: px(0.),
 				right_padding: px(0.),
 			}
 		}

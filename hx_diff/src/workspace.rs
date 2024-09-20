@@ -70,6 +70,7 @@ pub struct FileEntry {
 	pub right_source: FileSource,
 }
 
+#[allow(dead_code)] // Director(PathBuf) not yet used
 pub enum EntryKind {
 	Category(CategoryKind),
 	File(FileEntry),

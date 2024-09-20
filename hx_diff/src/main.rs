@@ -69,7 +69,7 @@ fn main() {
 
 			// theme::init(theme::LoadThemes::JustBase, cx); // Only includes "One Dark"
 			theme::init(theme::LoadThemes::All(Box::new(Assets)), cx);
-			Assets.load_fonts(cx);
+			Assets.load_fonts(cx).expect("Failed to load fonts");
 
 			let theme_registry = theme::ThemeRegistry::global(cx);
 			let theme_name = "One Dark";
@@ -116,7 +116,8 @@ fn main() {
 
 			let workspace = cx.new_model(|_cx| Workspace::from_args(&args));
 
-			cx.open_window(options, |cx| HxDiff::new(workspace, cx));
+			cx.open_window(options, |cx| HxDiff::new(workspace, cx))
+				.expect("Failed to create window");
 			cx.activate(true);
 		});
 }

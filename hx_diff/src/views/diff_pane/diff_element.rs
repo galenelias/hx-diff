@@ -13,7 +13,7 @@ pub struct DiffElement {
 
 pub struct DiffLayout {
 	lines: Vec<(ShapedLine, Hsla)>,
-	gutter_hitbox: Hitbox,
+	// gutter_hitbox: Hitbox,
 	gutter_dimensions: GutterDimensions,
 	text_hitbox: Hitbox,
 	line_height: Pixels,
@@ -150,7 +150,7 @@ impl Element for DiffElement {
 			origin: bounds.origin,
 			size: size(gutter_dimensions.width, bounds.size.height),
 		};
-		let gutter_hitbox = cx.insert_hitbox(gutter_bounds, false);
+		// let gutter_hitbox = cx.insert_hitbox(gutter_bounds, false);
 		let text_hitbox = cx.insert_hitbox(
 			Bounds {
 				origin: gutter_bounds.upper_right(),
@@ -168,14 +168,14 @@ impl Element for DiffElement {
 			let diff_line = &diff_lines[i];
 
 			let color = match diff_line.diff_type {
-				DiffType::Header => opaque_grey(0.5, 1.0),
+				DiffType::_Header => opaque_grey(0.5, 1.0),
 				DiffType::Normal => cx.theme().colors().editor_foreground,
 				DiffType::Added => cx.theme().status().created,
 				DiffType::Removed => cx.theme().status().deleted,
 			};
 
 			let background_color = match diff_line.diff_type {
-				DiffType::Header => cx.theme().colors().editor_background,
+				DiffType::_Header => cx.theme().colors().editor_background,
 				DiffType::Normal => cx.theme().colors().editor_background,
 				DiffType::Added => cx.theme().status().created_background,
 				DiffType::Removed => cx.theme().status().deleted_background,
@@ -197,7 +197,7 @@ impl Element for DiffElement {
 
 		DiffLayout {
 			lines,
-			gutter_hitbox,
+			// gutter_hitbox,
 			gutter_dimensions,
 			text_hitbox,
 			line_height,

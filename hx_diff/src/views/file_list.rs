@@ -32,7 +32,7 @@ struct Selection {
 struct ListItem {
 	item_type: ListItemType,
 	entry_id: ProjectEntryId,
-	path: PathBuf,
+	_path: PathBuf,
 	label: SharedString,
 	status: SharedString,
 }
@@ -91,7 +91,7 @@ impl FileList {
 				ListItem {
 					item_type,
 					entry_id: entry.id,
-					path: entry.path.clone(),
+					_path: entry.path.clone(),
 					// is_staged: entry.is_staged,
 					label: SharedString::from(label),
 					status,
@@ -220,14 +220,14 @@ impl FileList {
 
 	fn stage_file(&mut self, _: &StageFile, cx: &mut ViewContext<Self>) {
 		if let Some(entry) = self.selected_entry(cx) {
-			git::stage_file(&entry.path.to_string_lossy());
+			git::stage_file(&entry.path.to_string_lossy()).expect("Failed to stage file");
 			// TODO: Trigger reload/invalidate workspace
 		}
 	}
 
 	fn unstage_file(&mut self, _: &UnstageFile, cx: &mut ViewContext<Self>) {
 		if let Some(entry) = self.selected_entry(cx) {
-			git::unstage_file(&entry.path.to_string_lossy());
+			git::unstage_file(&entry.path.to_string_lossy()).expect("Failed to unstage file");
 			// TODO: Trigger reload/invalidate workspace
 		}
 	}
