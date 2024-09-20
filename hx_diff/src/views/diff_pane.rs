@@ -182,71 +182,10 @@ impl DiffPane {
 			}
 		}
 	}
-
-	// 	fn render_diff_line(&self, item: &DiffLine, cx: &mut ViewContext<Self>) -> Div {
-	// 		let color = match item.diff_type {
-	// 			DiffType::Header => opaque_grey(0.5, 1.0),
-	// 			DiffType::Normal => cx.theme().colors().editor_foreground,
-	// 			DiffType::Added => cx.theme().status().created,
-	// 			DiffType::Removed => cx.theme().status().deleted,
-	// 		};
-
-	// 		let background_color = match item.diff_type {
-	// 			DiffType::Header => cx.theme().colors().editor_background,
-	// 			DiffType::Normal => cx.theme().colors().editor_background,
-	// 			DiffType::Added => cx.theme().status().created_background,
-	// 			DiffType::Removed => cx.theme().status().deleted_background,
-	// 		};
-
-	// 		div()
-	// 			.flex()
-	// 			.flex_row()
-	// 			.flex_grow()
-	// 			.w_full()
-	// 			.bg(background_color)
-	// 			.pl_3()
-	// 			// .border_t_width(px(3.))
-	// 			// .border_color(cx.theme().colors().editor_background)
-	// 			// .when_some(border, |el, border| {
-	// 			// 	el.border_t_width(border)
-	// 			// 		.border_color(cx.theme().colors().border)
-	// 			// })
-	// 			.hover(|s| s.bg(cx.theme().colors().element_hover))
-	// 			.child(
-	// 				div()
-	// 					.flex()
-	// 					.flex_grow()
-	// 					.flex_nowrap()
-	// 					.overflow_x_hidden()
-	// 					.text_color(color)
-	// 					.child(item.text.clone()),
-	// 			)
-	// 	}
 }
 
 impl Render for DiffPane {
 	fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
 		DiffElement::new(cx.view())
-
-		// let settings = ThemeSettings::get_global(cx);
-		// div()
-		// 	.flex()
-		// 	.flex_col()
-		// 	.flex_1()
-		// 	.bg(cx.theme().colors().editor_background)
-		// 	.text_size(settings.buffer_font_size(cx))
-		// 	.font_family(settings.buffer_font.family.clone())
-		// 	.child(uniform_list(
-		// 		cx.view().clone(),
-		// 		"entries",
-		// 		self.diff_lines.len(),
-		// 		{
-		// 			|this, range, cx| {
-		// 				range
-		// 					.map(|i| this.render_diff_line(&this.diff_lines[i], cx))
-		// 					.collect()
-		// 			}
-		// 		},
-		// 	))
 	}
 }
