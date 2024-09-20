@@ -10,7 +10,7 @@ use theme::ThemeSettings;
 
 actions!(diff_pane, [NextDifference]);
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Copy)]
 pub enum DiffType {
 	_Header,
 	Normal,
@@ -26,20 +26,27 @@ pub struct DiffLine {
 	pub new_index: Option<usize>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GutterDimensions {
 	// pub left_padding: Pixels,
 	pub right_padding: Pixels,
 	pub width: Pixels,
 }
 
+pub struct DiffStyle {
+	text: TextStyle,
+}
+
 pub struct DiffPane {
+	style: DiffStyle,
 	diff_text: SharedString,
 	diff_lines: Vec<DiffLine>,
 	workspace: Model<Workspace>,
 	show_line_numbers: bool,
 	scroll_y: f32,
+	last_bounds: Option<Bounds<Pixels>>,
 	focus_handle: FocusHandle,
+	selection: Option<usize>,
 }
 
 impl DiffPane {
@@ -55,13 +62,21 @@ impl DiffPane {
 		})
 		.detach();
 
+		let text_style = TextStyle {
+			// TODO: Move into render and save?
+			..Default::default()
+		};
+
 		let file_list = cx.new_view(|_cx| DiffPane {
+			style: DiffStyle { text: text_style },
 			diff_text: SharedString::from("Diff content goes here."),
 			diff_lines: Vec::new(),
 			workspace,
 			show_line_numbers: true,
 			scroll_y: 0.0,
 			focus_handle,
+			last_bounds: None,
+			selection: None,
 		});
 
 		file_list
@@ -91,6 +106,8 @@ impl DiffPane {
 			.expect("Entry not found.");
 
 		self.scroll_y = 0.;
+
+		// Mid
 
 		match entry.kind {
 			EntryKind::File(ref file_entry) => {
@@ -151,7 +168,7 @@ impl DiffPane {
 				self.diff_lines = diff_lines;
 
 				if let Some(first_change_line) = first_change_line {
-					self.scroll_y = (first_change_line as f32 - 4.).max(0.); // TODO; 30%
+					self.scroll_to(first_change_line);
 				}
 			}
 			EntryKind::Directory(_) => {
@@ -177,7 +194,7 @@ impl DiffPane {
 				.width;
 
 			let line_count = self.diff_lines.len() as f32;
-			let chars = line_count.log10();
+			let chars = line_count.log10().ceil().max(1.);
 			let left_padding = em_advance;
 			let right_padding = em_advance;
 			GutterDimensions {
@@ -194,8 +211,45 @@ impl DiffPane {
 		}
 	}
 
-	fn next_difference(&mut self, _: &NextDifference, _cx: &mut ViewContext<Self>) {
-		println!("DiffPane: NextDifference");
+	fn scroll_to(&mut self, index: usize) {
+		self.scroll_y = (index as f32 - 4.).max(0.); // TODO; 30%
+		self.selection = Some(index);
+	}
+
+	fn get_line_height(&self, cx: &mut ViewContext<Self>) -> Pixels {
+		let settings = ThemeSettings::get_global(cx);
+		let font_size = settings.buffer_font_size(cx);
+		let line_height = relative(settings.buffer_line_height.value());
+		line_height
+			.to_pixels(font_size.into(), cx.rem_size())
+			.round()
+	}
+
+	fn next_difference(&mut self, _: &NextDifference, cx: &mut ViewContext<Self>) {
+		println!("Next Difference");
+		let diff_index = self.selection.unwrap_or(0);
+		let mut in_original_diff = true;
+		let mut scroll_dest = None;
+
+		let line_height = self.get_line_height(cx);
+		let height_in_lines = self.last_bounds.unwrap().size.height / line_height;
+		// Don't scroll if destination line is comfortably visible
+
+		for index in diff_index..self.diff_lines.len() {
+			let diff_type = self.diff_lines[index].diff_type;
+			if in_original_diff && diff_type == DiffType::Normal {
+				in_original_diff = false;
+			} else if !in_original_diff && diff_type != DiffType::Normal {
+				scroll_dest = Some(index);
+				break;
+			}
+		}
+
+		if let Some(scroll_dest) = scroll_dest {
+			self.scroll_to(scroll_dest);
+		} else {
+			// Ding!
+		}
 	}
 }
 

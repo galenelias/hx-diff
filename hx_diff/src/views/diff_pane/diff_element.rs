@@ -53,12 +53,15 @@ impl DiffElement {
 	) -> Vec<ShapedLine> {
 		let diff_pane = self.diff_pane.clone();
 		let show_line_numbers = diff_pane.read(cx).show_line_numbers;
+		let selection = diff_pane.read(cx).selection;
 
 		if show_line_numbers {
 			let mut scratch_string = String::new();
 			let settings = ThemeSettings::get_global(cx);
 			let buffer_font = settings.buffer_font.clone();
-			let color = cx.theme().colors().editor_line_number;
+			let base_color = cx.theme().colors().editor_line_number;
+			let active_color = cx.theme().colors().editor_active_line_number;
+			let active_bg_color = cx.theme().colors().editor_active_line_background;
 			let font_size = settings.buffer_font_size(cx);
 
 			rows.map(|ix| {
@@ -68,11 +71,17 @@ impl DiffElement {
 					write!(&mut scratch_string, "{}", new_index).unwrap();
 				}
 
+				let (color, background_color) = if Some(ix) == selection {
+					(active_color, Some(active_bg_color))
+				} else {
+					(base_color, None)
+				};
+
 				let run = TextRun {
 					len: scratch_string.len(),
 					font: buffer_font.clone(),
 					color,
-					background_color: None,
+					background_color,
 					underline: None,
 					strikethrough: None,
 				};
@@ -86,11 +95,54 @@ impl DiffElement {
 		}
 	}
 
+	fn mouse_left_down(
+		diff_pane: &mut DiffPane,
+		event: &MouseDownEvent,
+		text_hitbox: &Hitbox,
+		line_height: Pixels,
+		cx: &mut ViewContext<DiffPane>,
+	) {
+		if cx.default_prevented() {
+			return;
+		}
+
+		if !text_hitbox.is_hovered(cx) {
+			return;
+		}
+
+		let line_height = line_height;
+		let click_y = (event.position.y - text_hitbox.top()) / line_height;
+		let final_y = click_y + diff_pane.scroll_y;
+
+		println!("Clicked on line: {}", final_y as usize);
+
+		diff_pane.selection = Some(final_y as usize);
+
+		cx.stop_propagation();
+	}
+
 	fn paint_mouse_listeners(&mut self, layout: &mut DiffLayout, cx: &mut WindowContext) {
-		let diff_pane = self.diff_pane.clone();
 		let line_height = layout.line_height;
+		let text_hitbox = layout.text_hitbox.clone();
 
 		cx.on_mouse_event({
+			let diff_pane = self.diff_pane.clone();
+
+			move |event: &MouseDownEvent, phase, cx| {
+				if phase == DispatchPhase::Bubble {
+					match event.button {
+						MouseButton::Left => diff_pane.update(cx, |diff_pane, cx| {
+							Self::mouse_left_down(diff_pane, event, &text_hitbox, line_height, cx);
+						}),
+						_ => (),
+					}
+				}
+			}
+		});
+
+		cx.on_mouse_event({
+			let diff_pane = self.diff_pane.clone();
+
 			let mut delta = ScrollDelta::default();
 			let hitbox = layout.text_hitbox.clone();
 
@@ -164,6 +216,7 @@ impl Element for DiffElement {
 
 		let diff_lines = &self.diff_pane.read(cx).diff_lines.clone(); // TODO: How to not clone?
 		let scroll_y = self.diff_pane.read(cx).scroll_y;
+		let selection = self.diff_pane.read(cx).selection;
 
 		let focus_handle = self.diff_pane.focus_handle(cx);
 		cx.set_focus_handle(&focus_handle);
@@ -196,6 +249,7 @@ impl Element for DiffElement {
 
 		for i in start_row..max_row {
 			let diff_line = &diff_lines[i];
+			let is_active = Some(i) == selection;
 
 			let color = match diff_line.diff_type {
 				DiffType::_Header => opaque_grey(0.5, 1.0),
@@ -204,11 +258,12 @@ impl Element for DiffElement {
 				DiffType::Removed => cx.theme().status().deleted,
 			};
 
-			let background_color = match diff_line.diff_type {
-				DiffType::_Header => cx.theme().colors().editor_background,
-				DiffType::Normal => cx.theme().colors().editor_background,
-				DiffType::Added => cx.theme().status().created_background,
-				DiffType::Removed => cx.theme().status().deleted_background,
+			let background_color = match (is_active, diff_line.diff_type) {
+				(_, DiffType::_Header) => cx.theme().colors().editor_background,
+				(false, DiffType::Normal) => cx.theme().colors().editor_background,
+				(true, DiffType::Normal) => cx.theme().colors().editor_active_line_background,
+				(_, DiffType::Added) => cx.theme().status().created_background,
+				(_, DiffType::Removed) => cx.theme().status().deleted_background,
 			};
 			let run = TextRun {
 				len: diff_line.text.len(),
@@ -224,6 +279,10 @@ impl Element for DiffElement {
 				.unwrap();
 			lines.push((shaped_line, background_color))
 		}
+
+		self.diff_pane.update(cx, |diff_pane, cx| {
+			diff_pane.last_bounds = Some(bounds);
+		});
 
 		DiffLayout {
 			lines,
@@ -253,9 +312,20 @@ impl Element for DiffElement {
 
 		let scroll_y = self.diff_pane.read(cx).scroll_y;
 		let scroll_top = scroll_y * layout.line_height;
+		let selection = self.diff_pane.read(cx).selection;
+		let active_line_background = cx.theme().colors().editor_active_line_background;
 
 		for (i, line_number) in layout.line_numbers.iter().enumerate() {
 			let y = i as f32 * layout.line_height - (scroll_top % layout.line_height);
+			let row = scroll_y as usize + i;
+
+			if Some(row) == selection {
+				let bounds = Bounds {
+					origin: bounds.origin + point(px(0.), y),
+					size: size(layout.gutter_dimensions.width, layout.line_height),
+				};
+				cx.paint_quad(fill(bounds, active_line_background));
+			}
 
 			let origin = bounds.origin
 				+ point(
