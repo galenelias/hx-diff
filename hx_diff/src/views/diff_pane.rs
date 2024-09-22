@@ -265,7 +265,7 @@ impl DiffPane {
 
 	fn next_difference(&mut self, _: &NextDifference, cx: &mut ViewContext<Self>) {
 		let diff_index = self.selection.unwrap_or(0);
-		self.jump_to_next_difference((diff_index..self.diff_lines.len()), cx);
+		self.jump_to_next_difference(diff_index..self.diff_lines.len(), cx);
 	}
 }
 
