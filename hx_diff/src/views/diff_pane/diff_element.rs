@@ -116,6 +116,8 @@ impl DiffElement {
 
 		diff_pane.selection = Some(final_y as usize);
 
+		cx.refresh();
+
 		cx.stop_propagation();
 	}
 
@@ -171,9 +173,6 @@ impl DiffElement {
 		// TODO: Maybe move this out to HxDiff.
 		register_action(view, cx, DiffPane::next_difference);
 		register_action(view, cx, DiffPane::previous_difference);
-
-		cx.bind_keys([KeyBinding::new("f7", diff_pane::PreviousDifference, None)]);
-		cx.bind_keys([KeyBinding::new("f8", diff_pane::NextDifference, None)]);
 	}
 }
 

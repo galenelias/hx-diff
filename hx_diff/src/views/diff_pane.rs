@@ -231,6 +231,8 @@ impl DiffPane {
 		} else if index_float > self.scroll_y + height_in_lines - scroll_threshold {
 			self.scroll_y = (index_float - scroll_threshold).max(0.);
 		}
+
+		cx.refresh();
 	}
 
 	fn get_line_height(&self, cx: &mut ViewContext<Self>) -> Pixels {
