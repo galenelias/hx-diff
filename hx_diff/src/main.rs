@@ -97,6 +97,8 @@ fn main() {
 			cx.bind_keys([KeyBinding::new("cmd--", DecreaseFontSize, None)]);
 			cx.bind_keys([KeyBinding::new("cmd-0", ResetFontSize, None)]);
 			cx.bind_keys([KeyBinding::new("cmd-r", RefreshFileList, None)]);
+			cx.bind_keys([KeyBinding::new("f7", diff_pane::PreviousDifference, None)]);
+			cx.bind_keys([KeyBinding::new("f8", diff_pane::NextDifference, None)]);
 
 			cx.set_menus(vec![
 				Menu {
