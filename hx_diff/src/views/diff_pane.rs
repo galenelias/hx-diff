@@ -1,5 +1,7 @@
 mod diff_element;
 
+use std::{cell::Cell, rc::Rc};
+
 use self::workspace::{EntryKind, FileEntry, FileSource, ProjectEntryId, Workspace};
 use crate::*;
 use diff_element::DiffElement;
@@ -52,6 +54,7 @@ pub struct DiffPane {
 	last_bounds: Option<Bounds<Pixels>>,
 	focus_handle: FocusHandle,
 	selection: Option<usize>,
+	scrollbar_drag_state: Rc<Cell<Option<f32>>>,
 }
 
 impl DiffPane {
@@ -82,6 +85,7 @@ impl DiffPane {
 			focus_handle,
 			last_bounds: None,
 			selection: None,
+			scrollbar_drag_state: Rc::new(Cell::new(None)),
 		});
 
 		file_list
@@ -267,7 +271,7 @@ impl DiffPane {
 
 	fn next_difference(&mut self, _: &NextDifference, cx: &mut ViewContext<Self>) {
 		let diff_index = self.selection.unwrap_or(0);
-		self.jump_to_next_difference((diff_index..self.diff_lines.len()), cx);
+		self.jump_to_next_difference(diff_index..self.diff_lines.len(), cx);
 	}
 }
 

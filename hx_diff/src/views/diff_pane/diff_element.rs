@@ -1,11 +1,11 @@
 use super::DiffType;
-use crate::diff_pane;
 use crate::diff_pane::DiffLine;
 use crate::diff_pane::GutterDimensions;
 use crate::DiffPane;
 use gpui::*;
 use settings::Settings;
 use std::fmt::Write;
+use std::ops::Range;
 use theme::{ActiveTheme, ThemeSettings};
 
 pub fn register_action<T: Action>(
@@ -29,16 +29,60 @@ pub struct DiffElement {
 	diff_pane: View<DiffPane>,
 }
 
+#[derive(Clone, Debug)]
+struct ScrollbarLayout {
+	hitbox: Hitbox,
+	visible_row_range: Range<f32>,
+	// visible: bool,
+	row_height: Pixels,
+	thumb_height: Pixels,
+}
+
+impl ScrollbarLayout {
+	const BORDER_WIDTH: Pixels = px(1.0);
+	const LINE_MARKER_HEIGHT: Pixels = px(2.0);
+	const MIN_MARKER_HEIGHT: Pixels = px(5.0);
+	const MIN_THUMB_HEIGHT: Pixels = px(20.0);
+
+	fn y_for_row(&self, row: f32) -> Pixels {
+		self.hitbox.top() + row * self.row_height
+	}
+
+	fn thumb_bounds(&self) -> Bounds<Pixels> {
+		let thumb_top = self.y_for_row(self.visible_row_range.start);
+		let thumb_bottom = thumb_top + self.thumb_height;
+		Bounds::from_corners(
+			point(self.hitbox.left(), thumb_top),
+			point(self.hitbox.right(), thumb_bottom),
+		)
+	}
+
+	fn marker_bounds(&self, start: f32, end: f32) -> Bounds<Pixels> {
+		let top = self.y_for_row(start);
+		let bottom = self.y_for_row(end);
+		Bounds::from_corners(
+			point(self.hitbox.left(), top),
+			point(self.hitbox.right(), bottom),
+		)
+	}
+}
+
+type DiffRegions = Vec<((usize, usize), DiffType)>;
+
 pub struct DiffLayout {
 	lines: Vec<(ShapedLine, Hsla)>,
 	// gutter_hitbox: Hitbox,
 	gutter_dimensions: GutterDimensions,
+	scrollbar_layout: Option<ScrollbarLayout>,
 	text_hitbox: Hitbox,
 	line_height: Pixels,
 	line_numbers: Vec<ShapedLine>,
+	diff_regions: DiffRegions,
 }
 
 impl DiffElement {
+	pub(crate) const SCROLLBAR_WIDTH: Pixels = px(13.);
+
 	pub fn new(diff_pane: &View<DiffPane>) -> Self {
 		Self {
 			diff_pane: diff_pane.clone(),
@@ -95,6 +139,58 @@ impl DiffElement {
 		}
 	}
 
+	fn compute_diff_regions(&self, diff_lines: &[DiffLine]) -> Vec<((usize, usize), DiffType)> {
+		let mut diff_markers = Vec::new();
+		let mut last_diff_index = 0;
+		let mut last_diff_type = DiffType::Normal;
+		for (ix, diff) in diff_lines.iter().enumerate() {
+			if diff.diff_type != last_diff_type {
+				if last_diff_type != DiffType::Normal {
+					diff_markers.push(((last_diff_index, ix), last_diff_type));
+				}
+				last_diff_index = ix;
+				last_diff_type = diff.diff_type;
+			}
+		}
+
+		if last_diff_type != DiffType::Normal {
+			diff_markers.push(((last_diff_index, diff_lines.len()), last_diff_type));
+		}
+
+		diff_markers
+	}
+
+	fn layout_scrollbar(
+		&self,
+		total_rows: f32,
+		bounds: Bounds<Pixels>,
+		scroll_position: gpui::Point<f32>,
+		rows_per_page: f32,
+		cx: &mut WindowContext,
+	) -> Option<ScrollbarLayout> {
+		let _show_scrollbars = true; // TODO: contextual
+		let visible_row_range = scroll_position.y..scroll_position.y + rows_per_page;
+
+		let track_bounds = Bounds::from_corners(
+			point(bounds.right() - DiffElement::SCROLLBAR_WIDTH, bounds.top()),
+			point(bounds.right(), bounds.bottom()),
+		);
+
+		let scroll_beyond_last_line: f32 = 1.0;
+		let total_rows = (total_rows + scroll_beyond_last_line).max(rows_per_page);
+		let height = bounds.size.height;
+		let px_per_row = height / total_rows;
+		let thumb_height = (rows_per_page * px_per_row).max(ScrollbarLayout::MIN_THUMB_HEIGHT);
+		let row_height = (height - thumb_height) / (total_rows - rows_per_page).max(0.);
+
+		Some(ScrollbarLayout {
+			hitbox: cx.insert_hitbox(track_bounds, false),
+			visible_row_range,
+			row_height,
+			thumb_height,
+		})
+	}
+
 	fn mouse_left_down(
 		diff_pane: &mut DiffPane,
 		event: &MouseDownEvent,
@@ -121,9 +217,153 @@ impl DiffElement {
 		cx.stop_propagation();
 	}
 
-	fn paint_mouse_listeners(&mut self, layout: &mut DiffLayout, cx: &mut WindowContext) {
+	fn paint_scrollbar(&mut self, layout: &mut DiffLayout, cx: &mut WindowContext) {
+		let Some(scrollbar_layout) = layout.scrollbar_layout.as_ref() else {
+			return;
+		};
+
+		let thumb_bounds = scrollbar_layout.thumb_bounds();
+
+		cx.paint_layer(scrollbar_layout.hitbox.bounds, |cx| {
+			cx.paint_quad(quad(
+				scrollbar_layout.hitbox.bounds,
+				Corners::default(),
+				cx.theme().colors().scrollbar_track_background,
+				Edges {
+					top: Pixels::ZERO,
+					right: Pixels::ZERO,
+					bottom: Pixels::ZERO,
+					left: ScrollbarLayout::BORDER_WIDTH,
+				},
+				cx.theme().colors().scrollbar_track_border,
+			));
+
+			for diff_region in &layout.diff_regions {
+				cx.paint_quad(quad(
+					scrollbar_layout
+						.marker_bounds(diff_region.0 .0 as f32, diff_region.0 .1 as f32),
+					Corners::default(),
+					if diff_region.1 == DiffType::Added {
+						cx.theme().status().created
+					} else {
+						cx.theme().status().deleted
+					},
+					Edges {
+						top: Pixels::ZERO,
+						right: Pixels::ZERO,
+						bottom: Pixels::ZERO,
+						left: ScrollbarLayout::BORDER_WIDTH,
+					},
+					cx.theme().colors().scrollbar_thumb_border,
+				));
+			}
+
+			cx.paint_quad(quad(
+				thumb_bounds,
+				Corners::default(),
+				cx.theme().colors().scrollbar_thumb_background,
+				Edges {
+					top: Pixels::ZERO,
+					right: Pixels::ZERO,
+					bottom: Pixels::ZERO,
+					left: ScrollbarLayout::BORDER_WIDTH,
+				},
+				cx.theme().colors().scrollbar_thumb_border,
+			));
+		});
+
+		let hitbox = scrollbar_layout.hitbox.clone();
+		let height_in_lines = hitbox.size.height / layout.line_height;
+
+		cx.on_mouse_event({
+			let diff_pane = self.diff_pane.clone();
+			let rows_per_page =
+				scrollbar_layout.visible_row_range.end - scrollbar_layout.visible_row_range.start;
+
+			move |event: &MouseDownEvent, phase, cx| {
+				if phase == DispatchPhase::Capture || !hitbox.is_hovered(cx) {
+					return;
+				}
+
+				diff_pane.update(cx, |diff_pane, cx| {
+					// editor.scroll_manager.set_is_dragging_scrollbar(true, cx);
+
+					let y = event.position.y;
+
+					let is_dragging = diff_pane.scrollbar_drag_state.clone();
+					let percentage = (event.position.y - hitbox.top()) / hitbox.size.height;
+
+					// is_dragging.set(Some(5.));
+					cx.refresh();
+					if y < thumb_bounds.top() || thumb_bounds.bottom() < y {
+						// Set the thumb offset as the middle of the thumb
+						let thumb_top_offset = thumb_bounds.size.height / 2. / hitbox.size.height;
+						is_dragging.set(Some(thumb_top_offset));
+
+						let y = diff_pane.diff_lines.len() as f32 * percentage - rows_per_page / 2.;
+						diff_pane.scroll_y = y.clamp(
+							0.0,
+							diff_pane.diff_lines.len() as f32 - height_in_lines.floor(),
+						);
+					} else {
+						let thumb_top_offset =
+							(event.position.y - thumb_bounds.origin.y) / hitbox.size.height;
+						is_dragging.set(Some(thumb_top_offset));
+					}
+
+					cx.stop_propagation();
+				});
+			}
+		});
+
+		cx.on_mouse_event({
+			let diff_pane = self.diff_pane.clone();
+			let hitbox = scrollbar_layout.hitbox.clone();
+
+			move |event: &MouseMoveEvent, phase, cx| {
+				if phase.capture() {
+					return;
+				}
+
+				let drag_state = diff_pane.read(cx).scrollbar_drag_state.clone();
+
+				if let Some(drag_state) = drag_state.get().filter(|_| event.dragging()) {
+					let percentage =
+						(event.position.y - hitbox.top()) / hitbox.size.height - drag_state;
+
+					diff_pane.update(cx, |diff_pane, cx| {
+						let y = diff_pane.diff_lines.len() as f32 * percentage;
+						diff_pane.scroll_y = y.clamp(
+							0.0,
+							diff_pane.diff_lines.len() as f32 - height_in_lines.floor(),
+						);
+						cx.refresh();
+					});
+
+					cx.stop_propagation();
+				} else {
+					drag_state.set(None);
+				}
+			}
+		});
+
+		let is_dragging = self.diff_pane.read(cx).scrollbar_drag_state.clone();
+		cx.on_mouse_event(move |_event: &MouseUpEvent, phase, _cx| {
+			if phase.bubble() {
+				is_dragging.set(None);
+			}
+		});
+	}
+
+	fn paint_mouse_listeners(
+		&mut self,
+		layout: &mut DiffLayout,
+		bounds: Bounds<gpui::Pixels>,
+		cx: &mut WindowContext,
+	) {
 		let line_height = layout.line_height;
 		let text_hitbox = layout.text_hitbox.clone();
+		let height_in_lines = bounds.size.height / line_height;
 
 		cx.on_mouse_event({
 			let diff_pane = self.diff_pane.clone();
@@ -142,7 +382,6 @@ impl DiffElement {
 
 		cx.on_mouse_event({
 			let diff_pane = self.diff_pane.clone();
-
 			let mut delta = ScrollDelta::default();
 			let hitbox = layout.text_hitbox.clone();
 
@@ -150,14 +389,16 @@ impl DiffElement {
 				if phase == DispatchPhase::Bubble && hitbox.is_hovered(cx) {
 					delta = delta.coalesce(event.delta);
 
-					diff_pane.update(cx, |diff_pane, _cx| {
+					diff_pane.update(cx, |diff_pane, cx| {
 						match delta {
 							ScrollDelta::Lines(_) => (),
 							ScrollDelta::Pixels(point) => {
 								let y = diff_pane.scroll_y - point.y.0 / line_height.0 as f32;
-								diff_pane.scroll_y =
-									y.clamp(0.0, diff_pane.diff_lines.len() as f32);
-								_cx.notify();
+								diff_pane.scroll_y = y.clamp(
+									0.0,
+									diff_pane.diff_lines.len() as f32 - height_in_lines.floor(),
+								);
+								cx.notify();
 							}
 						};
 					});
@@ -245,6 +486,15 @@ impl Element for DiffElement {
 		);
 
 		let line_numbers = self.layout_line_numbers(start_row..max_row, diff_lines, cx);
+		let total_rows = diff_lines.len();
+
+		let scrollbar_layout = self.layout_scrollbar(
+			total_rows as f32,
+			bounds,
+			point(0., scroll_y),
+			height_in_lines,
+			cx,
+		);
 
 		for i in start_row..max_row {
 			let diff_line = &diff_lines[i];
@@ -279,17 +529,21 @@ impl Element for DiffElement {
 			lines.push((shaped_line, background_color))
 		}
 
-		self.diff_pane.update(cx, |diff_pane, cx| {
+		self.diff_pane.update(cx, |diff_pane, _cx| {
 			diff_pane.last_bounds = Some(bounds);
 		});
+
+		let diff_regions = self.compute_diff_regions(diff_lines);
 
 		DiffLayout {
 			lines,
 			// gutter_hitbox,
 			gutter_dimensions,
+			scrollbar_layout,
 			text_hitbox,
 			line_height,
 			line_numbers,
+			diff_regions,
 		}
 	}
 
@@ -301,7 +555,7 @@ impl Element for DiffElement {
 		layout: &mut Self::PrepaintState,
 		cx: &mut WindowContext,
 	) {
-		self.paint_mouse_listeners(layout, cx);
+		self.paint_mouse_listeners(layout, bounds, cx);
 
 		// I guess GPUI registers action on every 'frame'... weird.
 		self.register_actions(cx);
@@ -349,6 +603,8 @@ impl Element for DiffElement {
 				.paint(origin, layout.line_height, cx)
 				.expect("Failed to paint line");
 		}
+
+		self.paint_scrollbar(layout, cx);
 	}
 }
 
