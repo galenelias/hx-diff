@@ -1,5 +1,4 @@
 use super::DiffType;
-use crate::diff_pane;
 use crate::diff_pane::DiffLine;
 use crate::diff_pane::GutterDimensions;
 use crate::DiffPane;
@@ -272,6 +271,88 @@ impl DiffElement {
 				cx.theme().colors().scrollbar_thumb_border,
 			));
 		});
+
+		let hitbox = scrollbar_layout.hitbox.clone();
+		let height_in_lines = hitbox.size.height / layout.line_height;
+
+		cx.on_mouse_event({
+			let diff_pane = self.diff_pane.clone();
+			let rows_per_page =
+				scrollbar_layout.visible_row_range.end - scrollbar_layout.visible_row_range.start;
+
+			move |event: &MouseDownEvent, phase, cx| {
+				if phase == DispatchPhase::Capture || !hitbox.is_hovered(cx) {
+					return;
+				}
+
+				diff_pane.update(cx, |diff_pane, cx| {
+					// editor.scroll_manager.set_is_dragging_scrollbar(true, cx);
+
+					let y = event.position.y;
+
+					let is_dragging = diff_pane.scrollbar_drag_state.clone();
+					let percentage = (event.position.y - hitbox.top()) / hitbox.size.height;
+
+					// is_dragging.set(Some(5.));
+					cx.refresh();
+					if y < thumb_bounds.top() || thumb_bounds.bottom() < y {
+						// Set the thumb offset as the middle of the thumb
+						let thumb_top_offset = thumb_bounds.size.height / 2. / hitbox.size.height;
+						is_dragging.set(Some(thumb_top_offset));
+
+						let y = diff_pane.diff_lines.len() as f32 * percentage - rows_per_page / 2.;
+						diff_pane.scroll_y = y.clamp(
+							0.0,
+							diff_pane.diff_lines.len() as f32 - height_in_lines.floor(),
+						);
+					} else {
+						let thumb_top_offset =
+							(event.position.y - thumb_bounds.origin.y) / hitbox.size.height;
+						is_dragging.set(Some(thumb_top_offset));
+					}
+
+					cx.stop_propagation();
+				});
+			}
+		});
+
+		cx.on_mouse_event({
+			let diff_pane = self.diff_pane.clone();
+			let hitbox = scrollbar_layout.hitbox.clone();
+
+			move |event: &MouseMoveEvent, phase, cx| {
+				if phase.capture() {
+					return;
+				}
+
+				let drag_state = diff_pane.read(cx).scrollbar_drag_state.clone();
+
+				if let Some(drag_state) = drag_state.get().filter(|_| event.dragging()) {
+					let percentage =
+						(event.position.y - hitbox.top()) / hitbox.size.height - drag_state;
+
+					diff_pane.update(cx, |diff_pane, cx| {
+						let y = diff_pane.diff_lines.len() as f32 * percentage;
+						diff_pane.scroll_y = y.clamp(
+							0.0,
+							diff_pane.diff_lines.len() as f32 - height_in_lines.floor(),
+						);
+						cx.refresh();
+					});
+
+					cx.stop_propagation();
+				} else {
+					drag_state.set(None);
+				}
+			}
+		});
+
+		let is_dragging = self.diff_pane.read(cx).scrollbar_drag_state.clone();
+		cx.on_mouse_event(move |_event: &MouseUpEvent, phase, _cx| {
+			if phase.bubble() {
+				is_dragging.set(None);
+			}
+		});
 	}
 
 	fn paint_mouse_listeners(
@@ -301,7 +382,6 @@ impl DiffElement {
 
 		cx.on_mouse_event({
 			let diff_pane = self.diff_pane.clone();
-
 			let mut delta = ScrollDelta::default();
 			let hitbox = layout.text_hitbox.clone();
 
@@ -309,7 +389,7 @@ impl DiffElement {
 				if phase == DispatchPhase::Bubble && hitbox.is_hovered(cx) {
 					delta = delta.coalesce(event.delta);
 
-					diff_pane.update(cx, |diff_pane, _cx| {
+					diff_pane.update(cx, |diff_pane, cx| {
 						match delta {
 							ScrollDelta::Lines(_) => (),
 							ScrollDelta::Pixels(point) => {
@@ -318,7 +398,7 @@ impl DiffElement {
 									0.0,
 									diff_pane.diff_lines.len() as f32 - height_in_lines.floor(),
 								);
-								_cx.notify();
+								cx.notify();
 							}
 						};
 					});
