@@ -39,10 +39,10 @@ struct ListItem {
 
 pub struct FileList {
 	items: Vec<ListItem>,
-	// hx_diff: WeakView<HxDiff>,
-	model: Model<FileListModel>,
-	workspace: Model<Workspace>,
-	context_menu: Option<(View<ui::ContextMenu>, gpui::Point<Pixels>, Subscription)>,
+	// hx_diff: WeakEntity<HxDiff>,
+	model: Entity<FileListModel>,
+	workspace: Entity<Workspace>,
+	context_menu: Option<(Entity<ui::ContextMenu>, gpui::Point<Pixels>, Subscription)>,
 	focus_handle: FocusHandle,
 	selection: Option<Selection>,
 }
@@ -107,13 +107,13 @@ pub struct FileListModel {
 
 impl FileList {
 	pub fn new(
-		_hx_diff: WeakView<HxDiff>,
-		workspace: Model<Workspace>,
-		cx: &mut WindowContext,
-	) -> View<FileList> {
-		let model = cx.new_model(|_cx| FileListModel { width: None });
+		_hx_diff: WeakEntity<HxDiff>,
+		workspace: Entity<Workspace>,
+		cx: &mut App,
+	) -> Entity<FileList> {
+		let model = cx.new(|_cx| FileListModel { width: None });
 
-		let file_list = cx.new_view(|cx| {
+		let file_list = cx.new(|cx| {
 			cx.observe(&workspace, |model: &mut FileList, workspace, cx| {
 				model.refresh_from_workspace(workspace.read(cx));
 				cx.notify();
@@ -141,7 +141,7 @@ impl FileList {
 		file_list
 	}
 
-	pub fn resize_panel(&mut self, size: Option<Pixels>, cx: &mut ViewContext<Self>) {
+	pub fn resize_panel(&mut self, size: Option<Pixels>, cx: &mut Context<Self>) {
 		self.model.update(cx, |model, cx| {
 			model.width = size;
 			cx.notify()
@@ -152,9 +152,10 @@ impl FileList {
 		&mut self,
 		position: Point<Pixels>,
 		entry_id: ProjectEntryId,
-		cx: &mut ViewContext<Self>,
+		window: &mut Window,
+		cx: &mut Context<Self>,
 	) {
-		let context_menu = ui::ContextMenu::build(cx, |mut menu, cx| {
+		let context_menu = ui::ContextMenu::build(window, cx, |mut menu, _window, cx| {
 			let workspace = self.workspace.read(cx);
 			let entry = self.workspace.read(cx).get_entry(entry_id);
 
@@ -183,34 +184,37 @@ impl FileList {
 			menu
 		});
 
-		cx.focus_view(&context_menu);
+		cx.focus_view(&context_menu, window);
 
-		let subscription =
-			cx.subscribe(&context_menu, |this, _, _: &DismissEvent, cx| {
+		let subscription = cx.subscribe_in(
+			&context_menu,
+			window,
+			|this, _, _: &DismissEvent, window, cx| {
 				if this.context_menu.as_ref().is_some_and(|context_menu| {
-					context_menu.0.focus_handle(cx).contains_focused(cx)
+					context_menu.0.focus_handle(cx).contains_focused(window, cx)
 				}) {
-					cx.focus_self();
+					cx.focus_self(window);
 				}
 				this.context_menu.take();
 				cx.notify();
-			});
+			},
+		);
 
 		self.context_menu = Some((context_menu, position, subscription));
 	}
 
-	fn selected_entry_handle<'a>(&self, cx: &'a AppContext) -> Option<&'a Entry> {
+	fn selected_entry_handle<'a>(&self, cx: &'a App) -> Option<&'a Entry> {
 		let selection = self.selection?;
 		let entry = self.workspace.read(cx).get_entry(selection.entry_id)?;
 		Some(entry)
 	}
 
-	pub fn selected_entry<'a>(&self, cx: &'a AppContext) -> Option<&'a Entry> {
+	pub fn selected_entry<'a>(&self, cx: &'a App) -> Option<&'a Entry> {
 		let entry = self.selected_entry_handle(cx)?;
 		Some(entry)
 	}
 
-	fn copy_path(&mut self, _: &CopyPath, cx: &mut ViewContext<Self>) {
+	fn copy_path(&mut self, _: &CopyPath, _window: &mut Window, cx: &mut Context<Self>) {
 		if let Some(entry) = self.selected_entry(cx) {
 			cx.write_to_clipboard(ClipboardItem::new_string(
 				entry.path.to_string_lossy().to_string(),
@@ -218,30 +222,25 @@ impl FileList {
 		}
 	}
 
-	fn stage_file(&mut self, _: &StageFile, cx: &mut ViewContext<Self>) {
+	fn stage_file(&mut self, _: &StageFile, _window: &mut Window, cx: &mut Context<Self>) {
 		if let Some(entry) = self.selected_entry(cx) {
 			git::stage_file(&entry.path.to_string_lossy()).expect("Failed to stage file");
 			// TODO: Trigger reload/invalidate workspace
 		}
 	}
 
-	fn unstage_file(&mut self, _: &UnstageFile, cx: &mut ViewContext<Self>) {
+	fn unstage_file(&mut self, _: &UnstageFile, _window: &mut Window, cx: &mut Context<Self>) {
 		if let Some(entry) = self.selected_entry(cx) {
 			git::unstage_file(&entry.path.to_string_lossy()).expect("Failed to unstage file");
 			// TODO: Trigger reload/invalidate workspace
 		}
 	}
 
-	fn refresh_list(&mut self, _: &RefreshFileList, _cx: &mut ViewContext<Self>) {
+	fn refresh_list(&mut self, _: &RefreshFileList, _window: &mut Window, _cx: &mut Context<Self>) {
 		println!("FileList: Refresh File List!");
 	}
 
-	fn render_entry(
-		&self,
-		item: &ListItem,
-		index: usize,
-		cx: &mut ViewContext<Self>,
-	) -> ui::ListItem {
+	fn render_entry(&self, item: &ListItem, index: usize, cx: &mut Context<Self>) -> ui::ListItem {
 		let item_type = item.item_type;
 
 		let indent = match item_type {
@@ -267,11 +266,13 @@ impl FileList {
 					.px_2()
 					.text_color(text_color)
 					.id(id.to_usize())
-					.on_click(cx.listener(move |_this, _event: &gpui::ClickEvent, cx| {
-						if item_type == ListItemType::File {
-							cx.emit(FileListEvent::OpenedEntry { entry_id: id });
-						}
-					}))
+					.on_click(
+						cx.listener(move |_this, _event: &gpui::ClickEvent, _window, cx| {
+							if item_type == ListItemType::File {
+								cx.emit(FileListEvent::OpenedEntry { entry_id: id });
+							}
+						}),
+					)
 					.child(
 						div()
 							.ml(indent as f32 * px(12.))
@@ -286,24 +287,26 @@ impl FileList {
 							.text_sm(),
 					),
 			)
-			.on_secondary_mouse_down(cx.listener(move |this, event: &MouseDownEvent, cx| {
-				// Stop propagation to prevent the catch-all context menu for the project
-				// panel from being deployed.
-				cx.stop_propagation();
-				this.deploy_context_menu(event.position, id, cx);
-				cx.notify();
-			}))
+			.on_secondary_mouse_down(cx.listener(
+				move |this, event: &MouseDownEvent, window, cx| {
+					// Stop propagation to prevent the catch-all context menu for the project
+					// panel from being deployed.
+					cx.stop_propagation();
+					this.deploy_context_menu(event.position, id, window, cx);
+					cx.notify();
+				},
+			))
 	}
 }
 
-impl FocusableView for FileList {
-	fn focus_handle(&self, _cx: &AppContext) -> FocusHandle {
+impl Focusable for FileList {
+	fn focus_handle(&self, _cx: &App) -> FocusHandle {
 		self.focus_handle.clone()
 	}
 }
 
 impl Render for FileList {
-	fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
+	fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
 		let width = self.model.read(cx).width;
 
 		let handle = div()
@@ -314,9 +317,9 @@ impl Render for FileList {
 			.h_full()
 			.w(RESIZE_HANDLE_SIZE)
 			.cursor_col_resize()
-			.on_drag(DraggedPanel(PanelPosition::Left), |pane, cx| {
+			.on_drag(DraggedPanel(PanelPosition::Left), |pane, _, _, cx| {
 				cx.stop_propagation();
-				cx.new_view(|_| pane.clone())
+				cx.new(|_| pane.clone())
 			})
 			.occlude();
 
@@ -344,8 +347,8 @@ impl Render for FileList {
 					.child("Status"),
 			)
 			.child(
-				uniform_list(cx.view().clone(), "entries", self.items.len(), {
-					|this, range, cx| {
+				uniform_list(cx.entity().clone(), "entries", self.items.len(), {
+					|this, range, _window, cx| {
 						range
 							.map(|i| this.render_entry(&this.items[i], i, cx))
 							.collect()
@@ -358,7 +361,7 @@ impl Render for FileList {
 				deferred(
 					anchored()
 						.position(*position)
-						.anchor(gpui::AnchorCorner::TopLeft)
+						.anchor(gpui::Corner::TopLeft)
 						.child(menu.clone()),
 				)
 				.with_priority(1)

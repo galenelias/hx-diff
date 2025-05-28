@@ -23,10 +23,10 @@ actions!(
 	]
 );
 
-fn cycle_theme(cx: &mut AppContext) {
+fn cycle_theme(cx: &mut App) {
 	let theme_registry = theme::ThemeRegistry::global(cx);
 	let mut theme_settings = theme::ThemeSettings::get_global(cx).clone();
-	let all_themes = theme_registry.list_names(true);
+	let all_themes = theme_registry.list_names();
 	let current_index = all_themes
 		.iter()
 		.position(|t| t == &theme_settings.active_theme.name)
@@ -34,7 +34,7 @@ fn cycle_theme(cx: &mut AppContext) {
 	let new_index = (current_index + 1) % all_themes.len();
 	theme_settings.active_theme = theme_registry.get(&all_themes[new_index]).unwrap();
 	theme::ThemeSettings::override_global(theme_settings, cx);
-	cx.refresh()
+	cx.refresh_windows()
 }
 
 #[derive(Parser, Debug)]
@@ -59,9 +59,9 @@ pub struct Args {
 fn main() {
 	let args = Args::parse();
 
-	App::new()
+	Application::new()
 		.with_assets(Assets)
-		.run(move |cx: &mut AppContext| {
+		.run(move |cx: &mut App| {
 			let mut store = SettingsStore::new(cx);
 			store
 				.set_default_settings(default_settings().as_ref(), cx)
@@ -120,9 +120,9 @@ fn main() {
 				},
 			]);
 
-			let workspace = cx.new_model(|_cx| Workspace::from_args(&args));
+			let workspace = cx.new(|_cx| Workspace::from_args(&args));
 
-			cx.open_window(options, |cx| HxDiff::new(workspace, cx))
+			cx.open_window(options, |window, cx| HxDiff::new(workspace, window, cx))
 				.expect("Failed to create window");
 			cx.activate(true);
 		});

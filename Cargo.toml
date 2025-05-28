@@ -3,8 +3,3 @@
 members = ["git_cli_wrap", "hx_diff"]
 
 resolver = "2"
-
-# Need to align with the overriden version of tree-sitter that the zed repo uses, as their declared
-# version in their Cargo.toml is inaccurate.
-[patch.crates-io]
-tree-sitter = { git = "https://github.com/tree-sitter/tree-sitter", rev = "7f4a57817d58a2f134fe863674acad6bbf007228" }

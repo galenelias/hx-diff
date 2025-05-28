@@ -48,7 +48,7 @@ pub struct DiffPane {
 	style: DiffStyle,
 	diff_text: SharedString,
 	diff_lines: Vec<DiffLine>,
-	workspace: Model<Workspace>,
+	workspace: Entity<Workspace>,
 	show_line_numbers: bool,
 	scroll_y: f32,
 	last_bounds: Option<Bounds<Pixels>>,
@@ -59,23 +59,25 @@ pub struct DiffPane {
 
 impl DiffPane {
 	pub fn new(
-		_hx_diff: WeakView<HxDiff>,
-		workspace: Model<Workspace>,
-		cx: &mut WindowContext,
-	) -> View<DiffPane> {
+		_hx_diff: WeakEntity<HxDiff>,
+		workspace: Entity<Workspace>,
+		window: &mut Window,
+		cx: &mut App,
+	) -> Entity<DiffPane> {
 		let focus_handle = cx.focus_handle();
 
-		cx.on_focus_in(&focus_handle, |_cx| {
-			println!("Focus in diff_pane");
-		})
-		.detach();
+		window
+			.on_focus_in(&focus_handle, cx, |_, _cx| {
+				println!("Focus in diff_pane");
+			})
+			.detach();
 
 		let text_style = TextStyle {
 			// TODO: Move into render and save?
 			..Default::default()
 		};
 
-		let file_list = cx.new_view(|_cx| DiffPane {
+		let file_list = cx.new(|_cx| DiffPane {
 			style: DiffStyle { text: text_style },
 			diff_text: SharedString::from("Diff content goes here."),
 			diff_lines: Vec::new(),
@@ -107,7 +109,7 @@ impl DiffPane {
 		}
 	}
 
-	pub fn open_diff(&mut self, id: ProjectEntryId, cx: &mut ViewContext<Self>) {
+	pub fn open_diff(&mut self, id: ProjectEntryId, window: &mut Window, cx: &mut Context<Self>) {
 		let entry = self
 			.workspace
 			.read(cx)
@@ -177,7 +179,7 @@ impl DiffPane {
 				self.diff_lines = diff_lines;
 
 				if let Some(first_change_line) = first_change_line {
-					self.scroll_to(first_change_line, cx);
+					self.scroll_to(first_change_line, window, cx);
 				}
 			}
 			EntryKind::Directory(_) => {
@@ -189,7 +191,7 @@ impl DiffPane {
 		}
 	}
 
-	fn get_gutter_dimensions(&self, cx: &AppContext) -> GutterDimensions {
+	fn get_gutter_dimensions(&self, cx: &App) -> GutterDimensions {
 		if self.show_line_numbers {
 			let settings = ThemeSettings::get_global(cx);
 			let buffer_font = settings.buffer_font.clone();
@@ -220,10 +222,10 @@ impl DiffPane {
 		}
 	}
 
-	fn scroll_to(&mut self, index: usize, cx: &mut ViewContext<Self>) {
+	fn scroll_to(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
 		self.selection = Some(index);
 
-		let line_height = self.get_line_height(cx);
+		let line_height = self.get_line_height(window, cx);
 		let height_in_lines = self.last_bounds.unwrap().size.height / line_height;
 		const SCROLL_THRESHOLD: f32 = 0.25;
 		let scroll_threshold = height_in_lines * SCROLL_THRESHOLD;
@@ -236,20 +238,24 @@ impl DiffPane {
 			self.scroll_y = (index_float - scroll_threshold).max(0.);
 		}
 
-		cx.refresh();
+		window.refresh();
 	}
 
-	fn get_line_height(&self, cx: &mut ViewContext<Self>) -> Pixels {
+	fn get_line_height(&self, window: &mut Window, cx: &mut Context<Self>) -> Pixels {
 		let settings = ThemeSettings::get_global(cx);
 		let font_size = settings.buffer_font_size(cx);
 		let line_height = relative(settings.buffer_line_height.value());
 		line_height
-			.to_pixels(font_size.into(), cx.rem_size())
+			.to_pixels(font_size.into(), window.rem_size())
 			.round()
 	}
 
-	fn jump_to_next_difference<R>(&mut self, remaining_lines: R, cx: &mut ViewContext<Self>)
-	where
+	fn jump_to_next_difference<R>(
+		&mut self,
+		remaining_lines: R,
+		window: &mut Window,
+		cx: &mut Context<Self>,
+	) where
 		R: Iterator<Item = usize>,
 	{
 		let mut in_original_diff = true;
@@ -258,32 +264,37 @@ impl DiffPane {
 			if in_original_diff && diff_type == DiffType::Normal {
 				in_original_diff = false;
 			} else if !in_original_diff && diff_type != DiffType::Normal {
-				self.scroll_to(index, cx);
+				self.scroll_to(index, window, cx);
 				break;
 			}
 		}
 	}
 
-	fn previous_difference(&mut self, _: &PreviousDifference, cx: &mut ViewContext<Self>) {
+	fn previous_difference(
+		&mut self,
+		_: &PreviousDifference,
+		window: &mut Window,
+		cx: &mut Context<Self>,
+	) {
 		let diff_index = self.selection.unwrap_or(0);
-		self.jump_to_next_difference((0..=diff_index).rev(), cx);
+		self.jump_to_next_difference((0..=diff_index).rev(), window, cx);
 	}
 
-	fn next_difference(&mut self, _: &NextDifference, cx: &mut ViewContext<Self>) {
+	fn next_difference(&mut self, _: &NextDifference, window: &mut Window, cx: &mut Context<Self>) {
 		let diff_index = self.selection.unwrap_or(0);
-		self.jump_to_next_difference(diff_index..self.diff_lines.len(), cx);
+		self.jump_to_next_difference(diff_index..self.diff_lines.len(), window, cx);
 	}
 }
 
-impl FocusableView for DiffPane {
-	fn focus_handle(&self, _cx: &AppContext) -> FocusHandle {
+impl Focusable for DiffPane {
+	fn focus_handle(&self, _cx: &App) -> FocusHandle {
 		// println!("DiffPane::focus_handle");
 		self.focus_handle.clone()
 	}
 }
 
 impl Render for DiffPane {
-	fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
-		DiffElement::new(cx.view())
+	fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+		DiffElement::new(&cx.entity())
 	}
 }

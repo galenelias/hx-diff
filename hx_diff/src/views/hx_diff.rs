@@ -15,24 +15,24 @@ pub enum PanelPosition {
 pub struct DraggedPanel(pub PanelPosition);
 
 pub struct HxDiff {
-	_weak_self: WeakView<Self>,
-	file_pane: View<FileList>,
-	diff_pane: View<DiffPane>,
-	_workspace: Model<Workspace>,
+	_weak_self: WeakEntity<Self>,
+	file_pane: Entity<FileList>,
+	diff_pane: Entity<DiffPane>,
+	_workspace: Entity<Workspace>,
 }
 
 impl HxDiff {
-	pub fn new(workspace: Model<Workspace>, cx: &mut WindowContext) -> View<HxDiff> {
-		let hxdiff_view = cx.new_view(|cx| {
-			let weak_handle = cx.view().downgrade();
+	pub fn new(workspace: Entity<Workspace>, window: &mut Window, cx: &mut App) -> Entity<HxDiff> {
+		let hxdiff_view = cx.new(|cx| {
+			let weak_handle = cx.entity().downgrade();
 
 			let file_pane = FileList::new(weak_handle.clone(), workspace.clone(), cx);
-			let diff_pane = DiffPane::new(weak_handle.clone(), workspace.clone(), cx);
+			let diff_pane = DiffPane::new(weak_handle.clone(), workspace.clone(), window, cx);
 
-			cx.subscribe(&file_pane, {
-				move |hx_diff, _, event, cx| match event {
+			cx.subscribe_in(&file_pane, window, {
+				move |hx_diff, _, event, window, cx| match event {
 					&FileListEvent::OpenedEntry { entry_id } => {
-						hx_diff.open_file(entry_id, cx);
+						hx_diff.open_file(entry_id, window, cx);
 					}
 				}
 			})
@@ -40,7 +40,7 @@ impl HxDiff {
 
 			//cx.bind_keys([KeyBinding::new("cmd-r", RefreshFileList, None)]);
 
-			cx.focus_view(&diff_pane);
+			cx.focus_view(&diff_pane, window);
 
 			HxDiff {
 				_weak_self: weak_handle,
@@ -52,23 +52,23 @@ impl HxDiff {
 		hxdiff_view
 	}
 
-	// pub fn _weak_handle(&self) -> WeakView<Self> {
+	// pub fn _weak_handle(&self) -> WeakEntity<Self> {
 	// 	self._weak_self.clone()
 	// }
 
-	fn open_file(&mut self, id: ProjectEntryId, cx: &mut ViewContext<Self>) {
+	fn open_file(&mut self, id: ProjectEntryId, window: &mut Window, cx: &mut Context<Self>) {
 		self.diff_pane.update(cx, |diff_pane, cx| {
-			diff_pane.open_diff(id, cx);
+			diff_pane.open_diff(id, window, cx);
 		});
 	}
 
-	fn refresh_list(&mut self, _: &RefreshFileList, _cx: &mut ViewContext<Self>) {
+	fn refresh_list(&mut self, _: &RefreshFileList, _window: &mut Window, _cx: &mut Context<Self>) {
 		println!("HxDiff: Refresh File List!");
 	}
 }
 
 impl Render for HxDiff {
-	fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
+	fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
 		div()
 			.size_full()
 			.flex()
@@ -82,8 +82,8 @@ impl Render for HxDiff {
 					.flex_row()
 					.h_full()
 					.min_h_0() // Prevent the height from auto-fitting the children
-					.on_drag_move(
-						cx.listener(move |this, e: &DragMoveEvent<DraggedPanel>, cx| {
+					.on_drag_move(cx.listener(
+						move |this, e: &DragMoveEvent<DraggedPanel>, _window, cx| {
 							match e.drag(cx).0 {
 								PanelPosition::Left => {
 									let size = /*this.bounds.left() +*/ e.event.position.x;
@@ -92,8 +92,8 @@ impl Render for HxDiff {
 									});
 								}
 							}
-						}),
-					)
+						},
+					))
 					.child(self.file_pane.clone())
 					.child(self.diff_pane.clone()),
 			)
@@ -109,8 +109,8 @@ impl Render for HxDiff {
 	}
 }
 
-impl FocusableView for HxDiff {
-	fn focus_handle(&self, cx: &AppContext) -> FocusHandle {
+impl Focusable for HxDiff {
+	fn focus_handle(&self, cx: &App) -> FocusHandle {
 		self.diff_pane.focus_handle(cx)
 	}
 }

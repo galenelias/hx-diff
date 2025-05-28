@@ -4,21 +4,23 @@ use crate::diff_pane::GutterDimensions;
 use crate::DiffPane;
 use gpui::*;
 use settings::Settings;
+use std::any::TypeId;
 use std::fmt::Write;
 use std::ops::Range;
 use theme::{ActiveTheme, ThemeSettings};
 
 pub fn register_action<T: Action>(
-	view: &View<DiffPane>,
-	cx: &mut WindowContext,
-	listener: impl Fn(&mut DiffPane, &T, &mut ViewContext<DiffPane>) + 'static,
+	view: &Entity<DiffPane>,
+	window: &mut Window,
+	_cx: &mut App,
+	listener: impl Fn(&mut DiffPane, &T, &mut Window, &mut Context<DiffPane>) + 'static,
 ) {
 	let view = view.clone();
-	cx.on_action(std::any::TypeId::of::<T>(), move |action, phase, cx| {
+	window.on_action(TypeId::of::<T>(), move |action, phase, window, cx| {
 		let action = action.downcast_ref().unwrap();
 		if phase == DispatchPhase::Bubble {
 			view.update(cx, |editor, cx| {
-				listener(editor, action, cx);
+				listener(editor, action, window, cx);
 			})
 		}
 	})
@@ -26,7 +28,7 @@ pub fn register_action<T: Action>(
 
 // Custom Element for custom rendering of diffs
 pub struct DiffElement {
-	diff_pane: View<DiffPane>,
+	diff_pane: Entity<DiffPane>,
 }
 
 #[derive(Clone, Debug)]
@@ -83,7 +85,7 @@ pub struct DiffLayout {
 impl DiffElement {
 	pub(crate) const SCROLLBAR_WIDTH: Pixels = px(13.);
 
-	pub fn new(diff_pane: &View<DiffPane>) -> Self {
+	pub fn new(diff_pane: &Entity<DiffPane>) -> Self {
 		Self {
 			diff_pane: diff_pane.clone(),
 		}
@@ -93,7 +95,8 @@ impl DiffElement {
 		&self,
 		rows: std::ops::Range<usize>,
 		diff_lines: &[DiffLine],
-		cx: &mut WindowContext,
+		window: &mut Window,
+		cx: &mut App,
 	) -> Vec<ShapedLine> {
 		let diff_pane = self.diff_pane.clone();
 		let show_line_numbers = diff_pane.read(cx).show_line_numbers;
@@ -129,9 +132,9 @@ impl DiffElement {
 					underline: None,
 					strikethrough: None,
 				};
-				cx.text_system()
+				window
+					.text_system()
 					.shape_line(scratch_string.clone().into(), font_size, &[run])
-					.unwrap()
 			})
 			.collect()
 		} else {
@@ -166,7 +169,8 @@ impl DiffElement {
 		bounds: Bounds<Pixels>,
 		scroll_position: gpui::Point<f32>,
 		rows_per_page: f32,
-		cx: &mut WindowContext,
+		window: &mut Window,
+		_cx: &mut App,
 	) -> Option<ScrollbarLayout> {
 		let _show_scrollbars = true; // TODO: contextual
 		let visible_row_range = scroll_position.y..scroll_position.y + rows_per_page;
@@ -184,7 +188,7 @@ impl DiffElement {
 		let row_height = (height - thumb_height) / (total_rows - rows_per_page).max(0.);
 
 		Some(ScrollbarLayout {
-			hitbox: cx.insert_hitbox(track_bounds, false),
+			hitbox: window.insert_hitbox(track_bounds, false),
 			visible_row_range,
 			row_height,
 			thumb_height,
@@ -196,13 +200,14 @@ impl DiffElement {
 		event: &MouseDownEvent,
 		text_hitbox: &Hitbox,
 		line_height: Pixels,
-		cx: &mut ViewContext<DiffPane>,
+		window: &mut Window,
+		cx: &mut Context<DiffPane>,
 	) {
-		if cx.default_prevented() {
+		if window.default_prevented() {
 			return;
 		}
 
-		if !text_hitbox.is_hovered(cx) {
+		if !text_hitbox.is_hovered(window) {
 			return;
 		}
 
@@ -212,20 +217,20 @@ impl DiffElement {
 
 		diff_pane.selection = Some(final_y as usize);
 
-		cx.refresh();
+		window.refresh();
 
 		cx.stop_propagation();
 	}
 
-	fn paint_scrollbar(&mut self, layout: &mut DiffLayout, cx: &mut WindowContext) {
+	fn paint_scrollbar(&mut self, layout: &mut DiffLayout, window: &mut Window, cx: &mut App) {
 		let Some(scrollbar_layout) = layout.scrollbar_layout.as_ref() else {
 			return;
 		};
 
 		let thumb_bounds = scrollbar_layout.thumb_bounds();
 
-		cx.paint_layer(scrollbar_layout.hitbox.bounds, |cx| {
-			cx.paint_quad(quad(
+		window.paint_layer(scrollbar_layout.hitbox.bounds, |window| {
+			window.paint_quad(quad(
 				scrollbar_layout.hitbox.bounds,
 				Corners::default(),
 				cx.theme().colors().scrollbar_track_background,
@@ -236,10 +241,11 @@ impl DiffElement {
 					left: ScrollbarLayout::BORDER_WIDTH,
 				},
 				cx.theme().colors().scrollbar_track_border,
+				BorderStyle::default(),
 			));
 
 			for diff_region in &layout.diff_regions {
-				cx.paint_quad(quad(
+				window.paint_quad(quad(
 					scrollbar_layout
 						.marker_bounds(diff_region.0 .0 as f32, diff_region.0 .1 as f32),
 					Corners::default(),
@@ -255,10 +261,11 @@ impl DiffElement {
 						left: ScrollbarLayout::BORDER_WIDTH,
 					},
 					cx.theme().colors().scrollbar_thumb_border,
+					BorderStyle::default(),
 				));
 			}
 
-			cx.paint_quad(quad(
+			window.paint_quad(quad(
 				thumb_bounds,
 				Corners::default(),
 				cx.theme().colors().scrollbar_thumb_background,
@@ -269,19 +276,20 @@ impl DiffElement {
 					left: ScrollbarLayout::BORDER_WIDTH,
 				},
 				cx.theme().colors().scrollbar_thumb_border,
+				BorderStyle::default(),
 			));
 		});
 
 		let hitbox = scrollbar_layout.hitbox.clone();
 		let height_in_lines = hitbox.size.height / layout.line_height;
 
-		cx.on_mouse_event({
+		window.on_mouse_event({
 			let diff_pane = self.diff_pane.clone();
 			let rows_per_page =
 				scrollbar_layout.visible_row_range.end - scrollbar_layout.visible_row_range.start;
 
-			move |event: &MouseDownEvent, phase, cx| {
-				if phase == DispatchPhase::Capture || !hitbox.is_hovered(cx) {
+			move |event: &MouseDownEvent, phase, window, cx| {
+				if phase == DispatchPhase::Capture || !hitbox.is_hovered(window) {
 					return;
 				}
 
@@ -294,7 +302,7 @@ impl DiffElement {
 					let percentage = (event.position.y - hitbox.top()) / hitbox.size.height;
 
 					// is_dragging.set(Some(5.));
-					cx.refresh();
+					window.refresh();
 					if y < thumb_bounds.top() || thumb_bounds.bottom() < y {
 						// Set the thumb offset as the middle of the thumb
 						let thumb_top_offset = thumb_bounds.size.height / 2. / hitbox.size.height;
@@ -316,11 +324,11 @@ impl DiffElement {
 			}
 		});
 
-		cx.on_mouse_event({
+		window.on_mouse_event({
 			let diff_pane = self.diff_pane.clone();
 			let hitbox = scrollbar_layout.hitbox.clone();
 
-			move |event: &MouseMoveEvent, phase, cx| {
+			move |event: &MouseMoveEvent, phase, window, cx| {
 				if phase.capture() {
 					return;
 				}
@@ -331,13 +339,13 @@ impl DiffElement {
 					let percentage =
 						(event.position.y - hitbox.top()) / hitbox.size.height - drag_state;
 
-					diff_pane.update(cx, |diff_pane, cx| {
+					diff_pane.update(cx, |diff_pane, _cx| {
 						let y = diff_pane.diff_lines.len() as f32 * percentage;
 						diff_pane.scroll_y = y.clamp(
 							0.0,
 							diff_pane.diff_lines.len() as f32 - height_in_lines.floor(),
 						);
-						cx.refresh();
+						window.refresh();
 					});
 
 					cx.stop_propagation();
@@ -348,7 +356,7 @@ impl DiffElement {
 		});
 
 		let is_dragging = self.diff_pane.read(cx).scrollbar_drag_state.clone();
-		cx.on_mouse_event(move |_event: &MouseUpEvent, phase, _cx| {
+		window.on_mouse_event(move |_event: &MouseUpEvent, phase, _window, _cx| {
 			if phase.bubble() {
 				is_dragging.set(None);
 			}
@@ -359,20 +367,28 @@ impl DiffElement {
 		&mut self,
 		layout: &mut DiffLayout,
 		bounds: Bounds<gpui::Pixels>,
-		cx: &mut WindowContext,
+		window: &mut Window,
+		_cx: &mut App,
 	) {
 		let line_height = layout.line_height;
 		let text_hitbox = layout.text_hitbox.clone();
 		let height_in_lines = bounds.size.height / line_height;
 
-		cx.on_mouse_event({
+		window.on_mouse_event({
 			let diff_pane = self.diff_pane.clone();
 
-			move |event: &MouseDownEvent, phase, cx| {
+			move |event: &MouseDownEvent, phase, window, cx| {
 				if phase == DispatchPhase::Bubble {
 					match event.button {
 						MouseButton::Left => diff_pane.update(cx, |diff_pane, cx| {
-							Self::mouse_left_down(diff_pane, event, &text_hitbox, line_height, cx);
+							Self::mouse_left_down(
+								diff_pane,
+								event,
+								&text_hitbox,
+								line_height,
+								window,
+								cx,
+							);
 						}),
 						_ => (),
 					}
@@ -380,13 +396,13 @@ impl DiffElement {
 			}
 		});
 
-		cx.on_mouse_event({
+		window.on_mouse_event({
 			let diff_pane = self.diff_pane.clone();
 			let mut delta = ScrollDelta::default();
 			let hitbox = layout.text_hitbox.clone();
 
-			move |event: &ScrollWheelEvent, phase, cx| {
-				if phase == DispatchPhase::Bubble && hitbox.is_hovered(cx) {
+			move |event: &ScrollWheelEvent, phase, window, cx| {
+				if phase == DispatchPhase::Bubble && hitbox.is_hovered(window) {
 					delta = delta.coalesce(event.delta);
 
 					diff_pane.update(cx, |diff_pane, cx| {
@@ -408,12 +424,12 @@ impl DiffElement {
 		});
 	}
 
-	fn register_actions(&self, cx: &mut WindowContext) {
+	fn register_actions(&self, window: &mut Window, cx: &mut App) {
 		let view = &self.diff_pane;
 
 		// TODO: Maybe move this out to HxDiff.
-		register_action(view, cx, DiffPane::next_difference);
-		register_action(view, cx, DiffPane::previous_difference);
+		register_action(view, window, cx, DiffPane::next_difference);
+		register_action(view, window, cx, DiffPane::previous_difference);
 	}
 }
 
@@ -425,15 +441,21 @@ impl Element for DiffElement {
 		None
 	}
 
+	fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
+		None
+	}
+
 	fn request_layout(
 		&mut self,
 		_: Option<&GlobalElementId>,
-		cx: &mut WindowContext,
+		_inspector_id: Option<&gpui::InspectorElementId>,
+		window: &mut Window,
+		cx: &mut App,
 	) -> (gpui::LayoutId, ()) {
 		let mut style = Style::default();
 		style.size.width = relative(1.).into();
 		style.size.height = relative(1.).into();
-		let layout_id = cx.request_layout(style, None);
+		let layout_id = window.request_layout(style, None, cx);
 
 		(layout_id, ())
 	}
@@ -441,9 +463,11 @@ impl Element for DiffElement {
 	fn prepaint(
 		&mut self,
 		_: Option<&GlobalElementId>,
+		_inspector_id: Option<&gpui::InspectorElementId>,
 		bounds: Bounds<Pixels>,
 		_: &mut Self::RequestLayoutState,
-		cx: &mut WindowContext,
+		window: &mut Window,
+		cx: &mut App,
 	) -> Self::PrepaintState {
 		let mut lines = Vec::new();
 		let settings = ThemeSettings::get_global(cx);
@@ -451,7 +475,7 @@ impl Element for DiffElement {
 		let font_size = settings.buffer_font_size(cx);
 		let line_height = relative(settings.buffer_line_height.value());
 		let line_height = line_height
-			.to_pixels(font_size.into(), cx.rem_size())
+			.to_pixels(font_size.into(), window.rem_size())
 			.round();
 
 		let diff_lines = &self.diff_pane.read(cx).diff_lines.clone(); // TODO: How to not clone?
@@ -459,7 +483,7 @@ impl Element for DiffElement {
 		let selection = self.diff_pane.read(cx).selection;
 
 		let focus_handle = self.diff_pane.focus_handle(cx);
-		cx.set_focus_handle(&focus_handle);
+		window.set_focus_handle(&focus_handle, cx);
 
 		let start_row = scroll_y as usize;
 		let height_in_lines = bounds.size.height / line_height;
@@ -474,9 +498,9 @@ impl Element for DiffElement {
 			size: size(gutter_dimensions.width, bounds.size.height),
 		};
 		// let gutter_hitbox = cx.insert_hitbox(gutter_bounds, false);
-		let text_hitbox = cx.insert_hitbox(
+		let text_hitbox = window.insert_hitbox(
 			Bounds {
-				origin: gutter_bounds.upper_right(),
+				origin: gutter_bounds.top_right(),
 				size: size(
 					bounds.size.width - gutter_dimensions.width,
 					bounds.size.height,
@@ -485,7 +509,7 @@ impl Element for DiffElement {
 			false,
 		);
 
-		let line_numbers = self.layout_line_numbers(start_row..max_row, diff_lines, cx);
+		let line_numbers = self.layout_line_numbers(start_row..max_row, diff_lines, window, cx);
 		let total_rows = diff_lines.len();
 
 		let scrollbar_layout = self.layout_scrollbar(
@@ -493,6 +517,7 @@ impl Element for DiffElement {
 			bounds,
 			point(0., scroll_y),
 			height_in_lines,
+			window,
 			cx,
 		);
 
@@ -522,10 +547,10 @@ impl Element for DiffElement {
 				underline: None,
 				strikethrough: None,
 			};
-			let shaped_line = cx
-				.text_system()
-				.shape_line(diff_line.text.clone(), font_size, &[run])
-				.unwrap();
+			let shaped_line =
+				window
+					.text_system()
+					.shape_line(diff_line.text.clone(), font_size, &[run]);
 			lines.push((shaped_line, background_color))
 		}
 
@@ -550,18 +575,20 @@ impl Element for DiffElement {
 	fn paint(
 		&mut self,
 		_: Option<&GlobalElementId>,
+		__inspector_id: Option<&gpui::InspectorElementId>,
 		bounds: Bounds<gpui::Pixels>,
 		_: &mut Self::RequestLayoutState,
 		layout: &mut Self::PrepaintState,
-		cx: &mut WindowContext,
+		window: &mut Window,
+		cx: &mut App,
 	) {
-		self.paint_mouse_listeners(layout, bounds, cx);
+		self.paint_mouse_listeners(layout, bounds, window, cx);
 
 		// I guess GPUI registers action on every 'frame'... weird.
-		self.register_actions(cx);
+		self.register_actions(window, cx);
 
 		// cx.with_text_style(Some(text_style), |cx| {
-		cx.paint_quad(fill(bounds, cx.theme().colors().editor_background));
+		window.paint_quad(fill(bounds, cx.theme().colors().editor_background));
 
 		let scroll_y = self.diff_pane.read(cx).scroll_y;
 		let scroll_top = scroll_y * layout.line_height;
@@ -577,7 +604,7 @@ impl Element for DiffElement {
 					origin: bounds.origin + point(px(0.), y),
 					size: size(layout.gutter_dimensions.width, layout.line_height),
 				};
-				cx.paint_quad(fill(bounds, active_line_background));
+				window.paint_quad(fill(bounds, active_line_background));
 			}
 
 			let origin = bounds.origin
@@ -588,7 +615,7 @@ impl Element for DiffElement {
 					y,
 				);
 			line_number
-				.paint(origin, layout.line_height, cx)
+				.paint(origin, layout.line_height, window, cx)
 				.expect("Failed to paint line number");
 		}
 
@@ -597,14 +624,14 @@ impl Element for DiffElement {
 
 			let origin = bounds.origin + point(layout.gutter_dimensions.width, y);
 			let size = size(bounds.size.width, layout.line_height);
-			cx.paint_quad(fill(Bounds { origin, size }, line.1));
+			window.paint_quad(fill(Bounds { origin, size }, line.1));
 
 			line.0
-				.paint(origin, layout.line_height, cx)
+				.paint(origin, layout.line_height, window, cx)
 				.expect("Failed to paint line");
 		}
 
-		self.paint_scrollbar(layout, cx);
+		self.paint_scrollbar(layout, window, cx);
 	}
 }
 
