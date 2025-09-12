@@ -2,6 +2,7 @@ use crate::*;
 use git_cli_wrap as git;
 use gpui::*;
 use hx_diff::{DraggedPanel, PanelPosition};
+use std::ops::Range;
 use std::path::PathBuf;
 use theme::ActiveTheme;
 
@@ -347,12 +348,12 @@ impl Render for FileList {
 					.child("Status"),
 			)
 			.child(
-				uniform_list(cx.entity().clone(), "entries", self.items.len(), {
-					|this, range, _window, cx| {
+				uniform_list("entries", self.items.len(), {
+					cx.processor(|this, range: Range<usize>, _window, cx| {
 						range
 							.map(|i| this.render_entry(&this.items[i], i, cx))
 							.collect()
-					}
+					})
 				})
 				.size_full(),
 			)

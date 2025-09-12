@@ -84,10 +84,10 @@ fn main() {
 			cx.on_action(|_act: &Quit, cx| cx.quit());
 			cx.on_action(|_act: &CycleTheme, cx| cycle_theme(cx));
 			cx.on_action(|_act: &DecreaseFontSize, cx| {
-				theme::adjust_buffer_font_size(cx, |size| *size -= px(1.0))
+				theme::adjust_buffer_font_size(cx, |size| size - px(1.0))
 			});
 			cx.on_action(|_act: &IncreaseFontSize, cx| {
-				theme::adjust_buffer_font_size(cx, |size| *size += px(1.0))
+				theme::adjust_buffer_font_size(cx, |size| size + px(1.0))
 			});
 			cx.on_action(|_act: &ResetFontSize, cx| theme::reset_buffer_font_size(cx));
 

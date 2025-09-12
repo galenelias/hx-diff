@@ -11,8 +11,8 @@ git_cli_wrap = { path = "../git_cli_wrap" }
 clap = { version = "4.5.4", features = ["derive"] }
 similar = "2.5.0"
 
-gpui = { git = "https://github.com/zed-industries/zed", rev = "4c28d2c2e26e64cb9b4131a39e23e0265c7263f7" }
-theme = { git = "https://github.com/zed-industries/zed", rev = "4c28d2c2e26e64cb9b4131a39e23e0265c7263f7" }
-settings = { git = "https://github.com/zed-industries/zed", rev = "4c28d2c2e26e64cb9b4131a39e23e0265c7263f7" }
-assets = { git = "https://github.com/zed-industries/zed", rev = "4c28d2c2e26e64cb9b4131a39e23e0265c7263f7" }
-ui = { git = "https://github.com/zed-industries/zed", rev = "4c28d2c2e26e64cb9b4131a39e23e0265c7263f7" }
+gpui = { git = "https://github.com/zed-industries/zed", rev = "53c5db449575ea43aac57e8240c3e057a6ae5159" }
+theme = { git = "https://github.com/zed-industries/zed", rev = "53c5db449575ea43aac57e8240c3e057a6ae5159" }
+settings = { git = "https://github.com/zed-industries/zed", rev = "53c5db449575ea43aac57e8240c3e057a6ae5159" }
+assets = { git = "https://github.com/zed-industries/zed", rev = "53c5db449575ea43aac57e8240c3e057a6ae5159" }
+ui = { git = "https://github.com/zed-industries/zed", rev = "53c5db449575ea43aac57e8240c3e057a6ae5159" }

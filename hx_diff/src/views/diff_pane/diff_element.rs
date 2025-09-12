@@ -132,9 +132,12 @@ impl DiffElement {
 					underline: None,
 					strikethrough: None,
 				};
-				window
-					.text_system()
-					.shape_line(scratch_string.clone().into(), font_size, &[run])
+				window.text_system().shape_line(
+					scratch_string.clone().into(),
+					font_size,
+					&[run],
+					None,
+				)
 			})
 			.collect()
 		} else {
@@ -188,7 +191,7 @@ impl DiffElement {
 		let row_height = (height - thumb_height) / (total_rows - rows_per_page).max(0.);
 
 		Some(ScrollbarLayout {
-			hitbox: window.insert_hitbox(track_bounds, false),
+			hitbox: window.insert_hitbox(track_bounds, HitboxBehavior::Normal),
 			visible_row_range,
 			row_height,
 			thumb_height,
@@ -506,7 +509,7 @@ impl Element for DiffElement {
 					bounds.size.height,
 				),
 			},
-			false,
+			HitboxBehavior::Normal,
 		);
 
 		let line_numbers = self.layout_line_numbers(start_row..max_row, diff_lines, window, cx);
@@ -550,7 +553,7 @@ impl Element for DiffElement {
 			let shaped_line =
 				window
 					.text_system()
-					.shape_line(diff_line.text.clone(), font_size, &[run]);
+					.shape_line(diff_line.text.clone(), font_size, &[run], None);
 			lines.push((shaped_line, background_color))
 		}
 
