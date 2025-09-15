@@ -409,17 +409,17 @@ impl DiffElement {
 					delta = delta.coalesce(event.delta);
 
 					diff_pane.update(cx, |diff_pane, cx| {
-						match delta {
-							ScrollDelta::Lines(_) => (),
+						let new_y = match delta {
+							ScrollDelta::Lines(lines) => diff_pane.scroll_y - lines.y,
 							ScrollDelta::Pixels(point) => {
-								let y = diff_pane.scroll_y - point.y.0 / line_height.0 as f32;
-								diff_pane.scroll_y = y.clamp(
-									0.0,
-									diff_pane.diff_lines.len() as f32 - height_in_lines.floor(),
-								);
-								cx.notify();
+								diff_pane.scroll_y - point.y.0 / line_height.0 as f32
 							}
 						};
+						diff_pane.scroll_y = new_y.clamp(
+							0.0,
+							diff_pane.diff_lines.len() as f32 - height_in_lines.floor(),
+						);
+						cx.notify();
 					});
 					cx.stop_propagation();
 				}
