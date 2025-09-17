@@ -91,14 +91,26 @@ fn main() {
 			});
 			cx.on_action(|_act: &ResetFontSize, cx| theme::reset_buffer_font_size(cx));
 
-			cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
-			cx.bind_keys([KeyBinding::new("cmd-t", CycleTheme, None)]);
-			cx.bind_keys([KeyBinding::new("cmd-+", IncreaseFontSize, None)]);
-			cx.bind_keys([KeyBinding::new("cmd--", DecreaseFontSize, None)]);
-			cx.bind_keys([KeyBinding::new("cmd-0", ResetFontSize, None)]);
-			cx.bind_keys([KeyBinding::new("cmd-r", RefreshFileList, None)]);
 			cx.bind_keys([KeyBinding::new("f7", diff_pane::PreviousDifference, None)]);
 			cx.bind_keys([KeyBinding::new("f8", diff_pane::NextDifference, None)]);
+
+			// OS specific key bindings
+			if cfg!(target_os = "macos") {
+				cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
+				cx.bind_keys([KeyBinding::new("cmd-t", CycleTheme, None)]);
+				cx.bind_keys([KeyBinding::new("cmd-+", IncreaseFontSize, None)]);
+				cx.bind_keys([KeyBinding::new("cmd-=", IncreaseFontSize, None)]);
+				cx.bind_keys([KeyBinding::new("cmd--", DecreaseFontSize, None)]);
+				cx.bind_keys([KeyBinding::new("cmd-0", ResetFontSize, None)]);
+				cx.bind_keys([KeyBinding::new("cmd-r", RefreshFileList, None)]);
+			} else if cfg!(target_os = "windows") {
+				cx.bind_keys([KeyBinding::new("ctrl-t", CycleTheme, None)]);
+				cx.bind_keys([KeyBinding::new("ctrl-+", IncreaseFontSize, None)]);
+				cx.bind_keys([KeyBinding::new("ctrl-=", IncreaseFontSize, None)]);
+				cx.bind_keys([KeyBinding::new("ctrl--", DecreaseFontSize, None)]);
+				cx.bind_keys([KeyBinding::new("ctrl-0", ResetFontSize, None)]);
+				cx.bind_keys([KeyBinding::new("ctrl-r", RefreshFileList, None)]);
+			}
 
 			cx.set_menus(vec![
 				Menu {
