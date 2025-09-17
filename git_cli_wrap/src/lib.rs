@@ -178,7 +178,7 @@ fn parse_status(status: &str) -> Result<GitStatus, GitError> {
 			let unstaged_status = EntryStatus::from_u8(&file_status.as_bytes()[1]);
 
 			iter.nth(3); // Skip: file mode for HEAD, index, worktree
-			 // TODO: Handle rename confidence parameter
+				// TODO: Handle rename confidence parameter
 
 			let head_sha1 = iter.next().unwrap().to_owned();
 			let index_sha1 = iter.next().unwrap().to_owned();
@@ -194,6 +194,17 @@ fn parse_status(status: &str) -> Result<GitStatus, GitError> {
 			});
 		}
 	}
+
+	// Sort the entries by path, such that all items in the same directory appear adjacent to each other
+	entries.sort_by(|a, b| {
+		let dir_a = a.path.parent().unwrap();
+		let dir_b = b.path.parent().unwrap();
+
+		// First compare directories, then filenames
+		dir_a
+			.cmp(dir_b)
+			.then_with(|| a.path.file_name().cmp(&b.path.file_name()))
+	});
 
 	Ok(GitStatus {
 		branch_oid,
