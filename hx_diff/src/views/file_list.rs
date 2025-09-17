@@ -73,7 +73,9 @@ impl FileList {
 					EntryKind::Category(workspace::CategoryKind::Commit) => {
 						"Commit Details Here".into()
 					}
-					EntryKind::Directory(_) => entry.path.to_string_lossy().into_owned().into(),
+					EntryKind::Directory(_) => {
+						crate::common::clean_path_display(&entry.path).into()
+					}
 					EntryKind::File(ref _name) => entry
 						.path
 						.file_name()

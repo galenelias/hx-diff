@@ -22,3 +22,14 @@ pub fn setup_window(app_width: f32, app_height: f32, cx: &mut App) -> WindowOpti
 
 	options
 }
+
+pub fn clean_path_display(path: &std::path::PathBuf) -> String {
+	let path_str = path.to_string_lossy();
+	#[cfg(windows)]
+	{
+		if path_str.starts_with(r"\\?\") {
+			return path_str[4..].to_string();
+		}
+	}
+	return path_str.to_string();
+}
