@@ -77,9 +77,9 @@ impl Render for HxDiff {
 			.on_action(cx.listener(Self::refresh_list))
 			.child(
 				div() // main status bar
-					.flex_grow()
 					.flex()
-					.flex_row()
+					.flex_grow()
+					.flex_row( )
 					.h_full()
 					.min_h_0() // Prevent the height from auto-fitting the children
 					.on_drag_move(cx.listener(
@@ -95,7 +95,11 @@ impl Render for HxDiff {
 						},
 					))
 					.child(self.file_pane.clone())
-					.child(self.diff_pane.clone()),
+					.child(
+						div()
+							.flex_grow()
+							.child(self.diff_pane.clone())
+					),
 			)
 		// .child(
 		// 	div() // Status bar - Nothing useful here yet
