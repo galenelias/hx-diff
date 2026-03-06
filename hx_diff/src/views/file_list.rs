@@ -8,7 +8,7 @@ use theme::ActiveTheme;
 
 use self::workspace::{EntryKind, ProjectEntryId, Workspace};
 
-const RESIZE_HANDLE_SIZE: Pixels = Pixels(6.);
+const RESIZE_HANDLE_SIZE: Pixels = px(6.);
 
 #[derive(Debug)]
 pub enum FileListEvent {

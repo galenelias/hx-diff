@@ -27,12 +27,16 @@ fn cycle_theme(cx: &mut App) {
 	let theme_registry = theme::ThemeRegistry::global(cx);
 	let mut theme_settings = theme::ThemeSettings::get_global(cx).clone();
 	let all_themes = theme_registry.list_names();
+	let current_theme_name = theme_settings
+		.theme
+		.name(*theme::SystemAppearance::global(cx));
 	let current_index = all_themes
 		.iter()
-		.position(|t| t == &theme_settings.active_theme.name)
+		.position(|t| t.as_str() == current_theme_name.0.as_ref())
 		.unwrap();
 	let new_index = (current_index + 1) % all_themes.len();
-	theme_settings.active_theme = theme_registry.get(&all_themes[new_index]).unwrap();
+	theme_settings.theme =
+		theme::ThemeSelection::Static(settings::ThemeName(all_themes[new_index].as_ref().into()));
 	theme::ThemeSettings::override_global(theme_settings, cx);
 	cx.refresh_windows()
 }
@@ -62,7 +66,7 @@ fn main() {
 	Application::new()
 		.with_assets(Assets)
 		.run(move |cx: &mut App| {
-			let mut store = SettingsStore::new(cx);
+			let mut store = SettingsStore::new(cx, &default_settings());
 			store
 				.set_default_settings(default_settings().as_ref(), cx)
 				.unwrap();
@@ -72,11 +76,11 @@ fn main() {
 			theme::init(theme::LoadThemes::All(Box::new(Assets)), cx);
 			Assets.load_fonts(cx).expect("Failed to load fonts");
 
-			let theme_registry = theme::ThemeRegistry::global(cx);
 			let theme_name = "One Dark";
 
 			let mut theme_settings = theme::ThemeSettings::get_global(cx).clone();
-			theme_settings.active_theme = theme_registry.get(&theme_name).unwrap();
+			theme_settings.theme =
+				theme::ThemeSelection::Static(settings::ThemeName(theme_name.into()));
 			theme::ThemeSettings::override_global(theme_settings, cx);
 
 			let options = setup_window(WIDTH, HEIGHT, cx);

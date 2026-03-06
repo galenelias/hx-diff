@@ -412,7 +412,7 @@ impl DiffElement {
 						let new_y = match delta {
 							ScrollDelta::Lines(lines) => diff_pane.scroll_y - lines.y,
 							ScrollDelta::Pixels(point) => {
-								diff_pane.scroll_y - point.y.0 / line_height.0 as f32
+								diff_pane.scroll_y - point.y / line_height
 							}
 						};
 						diff_pane.scroll_y = new_y.clamp(
