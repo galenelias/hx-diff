@@ -63,7 +63,7 @@ pub struct Args {
 fn main() {
 	let args = Args::parse();
 
-	Application::new()
+	gpui_platform::application()
 		.with_assets(Assets)
 		.run(move |cx: &mut App| {
 			let mut store = SettingsStore::new(cx, &default_settings());

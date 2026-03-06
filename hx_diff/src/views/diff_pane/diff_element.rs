@@ -618,7 +618,14 @@ impl Element for DiffElement {
 					y,
 				);
 			line_number
-				.paint(origin, layout.line_height, window, cx)
+				.paint(
+					origin,
+					layout.line_height,
+					TextAlign::Left,
+					None,
+					window,
+					cx,
+				)
 				.expect("Failed to paint line number");
 		}
 
@@ -630,7 +637,14 @@ impl Element for DiffElement {
 			window.paint_quad(fill(Bounds { origin, size }, line.1));
 
 			line.0
-				.paint(origin, layout.line_height, window, cx)
+				.paint(
+					origin,
+					layout.line_height,
+					TextAlign::Left,
+					None,
+					window,
+					cx,
+				)
 				.expect("Failed to paint line");
 		}
 
