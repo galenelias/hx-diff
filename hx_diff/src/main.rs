@@ -85,6 +85,13 @@ fn main() {
 
 			let options = setup_window(WIDTH, HEIGHT, cx);
 
+			cx.on_window_closed(|cx| {
+				if cx.windows().is_empty() {
+					cx.quit();
+				}
+			})
+			.detach();
+
 			cx.on_action(|_act: &Quit, cx| cx.quit());
 			cx.on_action(|_act: &CycleTheme, cx| cycle_theme(cx));
 			cx.on_action(|_act: &DecreaseFontSize, cx| {
