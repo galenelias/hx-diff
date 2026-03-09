@@ -71,8 +71,18 @@ impl ScrollbarLayout {
 
 type DiffRegions = Vec<((usize, usize), DiffType)>;
 
+struct DiffLineSegment {
+	shaped_line: ShapedLine,
+	x_offset: Pixels,
+}
+
+struct DiffLayoutLine {
+	segments: Vec<DiffLineSegment>,
+	background_color: Hsla,
+}
+
 pub struct DiffLayout {
-	lines: Vec<(ShapedLine, Hsla)>,
+	lines: Vec<DiffLayoutLine>,
 	// gutter_hitbox: Hitbox,
 	gutter_dimensions: GutterDimensions,
 	scrollbar_layout: Option<ScrollbarLayout>,
@@ -524,6 +534,15 @@ impl Element for DiffElement {
 			cx,
 		);
 
+		let font_id = cx.text_system().resolve_font(&buffer_font);
+		let space_advance = cx
+			.text_system()
+			.advance(font_id, font_size, ' ')
+			.unwrap()
+			.width;
+		let tab_size = self.diff_pane.read(cx).tab_size;
+		let tab_stop_width = space_advance * tab_size as f32;
+
 		for i in start_row..max_row {
 			let diff_line = &diff_lines[i];
 			let is_active = Some(i) == selection;
@@ -542,19 +561,46 @@ impl Element for DiffElement {
 				(_, DiffType::Added) => cx.theme().status().created_background,
 				(_, DiffType::Removed) => cx.theme().status().deleted_background,
 			};
-			let run = TextRun {
-				len: diff_line.text.len(),
-				font: buffer_font.clone(),
-				color,
-				background_color: None,
-				underline: None,
-				strikethrough: None,
-			};
-			let shaped_line =
-				window
-					.text_system()
-					.shape_line(diff_line.text.clone(), font_size, &[run], None);
-			lines.push((shaped_line, background_color))
+
+			let parts: Vec<&str> = diff_line.text.split('\t').collect();
+			let mut segments = Vec::new();
+			let mut current_x = px(0.);
+
+			for (part_idx, part) in parts.iter().enumerate() {
+				if !part.is_empty() {
+					let run = TextRun {
+						len: part.len(),
+						font: buffer_font.clone(),
+						color,
+						background_color: None,
+						underline: None,
+						strikethrough: None,
+					};
+					let shaped_line = window.text_system().shape_line(
+						SharedString::from(part.to_string()),
+						font_size,
+						&[run],
+						None,
+					);
+					let x_offset = current_x;
+					current_x += shaped_line.width;
+					segments.push(DiffLineSegment {
+						x_offset,
+						shaped_line,
+					});
+				}
+
+				if part_idx < parts.len() - 1 {
+					let next_stop =
+						((current_x / tab_stop_width).floor() + 1.0) * tab_stop_width;
+					current_x = next_stop;
+				}
+			}
+
+			lines.push(DiffLayoutLine {
+				segments,
+				background_color,
+			});
 		}
 
 		self.diff_pane.update(cx, |diff_pane, _cx| {
@@ -634,18 +680,22 @@ impl Element for DiffElement {
 
 			let origin = bounds.origin + point(layout.gutter_dimensions.width, y);
 			let size = size(bounds.size.width, layout.line_height);
-			window.paint_quad(fill(Bounds { origin, size }, line.1));
+			window.paint_quad(fill(Bounds { origin, size }, line.background_color));
 
-			line.0
-				.paint(
-					origin,
-					layout.line_height,
-					TextAlign::Left,
-					None,
-					window,
-					cx,
-				)
-				.expect("Failed to paint line");
+			for segment in &line.segments {
+				let seg_origin = origin + point(segment.x_offset, px(0.));
+				segment
+					.shaped_line
+					.paint(
+						seg_origin,
+						layout.line_height,
+						TextAlign::Left,
+						None,
+						window,
+						cx,
+					)
+					.expect("Failed to paint line segment");
+			}
 		}
 
 		self.paint_scrollbar(layout, window, cx);
