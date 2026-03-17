@@ -3,6 +3,7 @@ mod diff_element;
 use std::{cell::Cell, rc::Rc};
 
 use self::workspace::{EntryKind, FileEntry, FileSource, ProjectEntryId, Workspace};
+use crate::syntax::{HighlightRun, SyntaxHighlighter};
 use crate::*;
 use diff_element::DiffElement;
 use git_cli_wrap as git;
@@ -26,6 +27,7 @@ pub struct DiffLine {
 	pub diff_type: DiffType,
 	pub _old_index: Option<usize>,
 	pub new_index: Option<usize>,
+	pub highlight_runs: Vec<HighlightRun>,
 }
 
 #[derive(Clone, Debug)]
@@ -55,6 +57,7 @@ pub struct DiffPane {
 	focus_handle: FocusHandle,
 	selection: Option<usize>,
 	scrollbar_drag_state: Rc<Cell<Option<f32>>>,
+	syntax_highlighter: SyntaxHighlighter,
 }
 
 impl DiffPane {
@@ -88,6 +91,7 @@ impl DiffPane {
 			last_bounds: None,
 			selection: None,
 			scrollbar_drag_state: Rc::new(Cell::new(None)),
+			syntax_highlighter: SyntaxHighlighter::new(),
 		});
 
 		file_list
@@ -127,6 +131,13 @@ impl DiffPane {
 
 				let right_contents =
 					DiffPane::get_file_contents(file_entry, &file_entry.right_source);
+
+				let left_highlights = self
+					.syntax_highlighter
+					.highlight_content(&left_contents, &file_entry.path);
+				let right_highlights = self
+					.syntax_highlighter
+					.highlight_content(&right_contents, &file_entry.path);
 
 				let diff = TextDiff::from_lines(&left_contents, &right_contents);
 				let mut diff_lines = Vec::new();
@@ -168,12 +179,28 @@ impl DiffPane {
 					}
 
 					let text = change;
+					let text_str = text.value().trim_end_matches('\n').to_string();
+
+					// TODO: Can we avoid cloning the highlights data? Use reference?
+					let highlight_runs = match diff_type {
+						DiffType::Removed => change
+							.old_index()
+							.and_then(|idx| left_highlights.get(idx))
+							.map(|runs| runs.clone())
+							.unwrap_or_default(),
+						_ => change
+							.new_index()
+							.and_then(|idx| right_highlights.get(idx))
+							.map(|runs| runs.clone())
+							.unwrap_or_default(),
+					};
 
 					diff_lines.push(DiffLine {
-						text: text.value().trim_end().to_string().into(),
+						text: text_str.into(),
 						diff_type,
 						_old_index: change.old_index(),
 						new_index: change.new_index(),
+						highlight_runs,
 					});
 				}
 				self.diff_lines = diff_lines;

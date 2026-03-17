@@ -17,3 +17,4 @@ settings = { git = "https://github.com/zed-industries/zed", rev = "3959921c2ece1
 assets = { git = "https://github.com/zed-industries/zed", rev = "3959921c2ece1a445d7e7e72fcbd03d15aefb77d" }
 ui = { git = "https://github.com/zed-industries/zed", rev = "3959921c2ece1a445d7e7e72fcbd03d15aefb77d" }
 gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "3959921c2ece1a445d7e7e72fcbd03d15aefb77d", features = [ "font-kit", "runtime_shaders" ] }
+syntect = "5.3.0"

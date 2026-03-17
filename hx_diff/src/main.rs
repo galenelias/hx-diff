@@ -1,4 +1,5 @@
 mod common;
+mod syntax;
 mod views;
 mod workspace;
 

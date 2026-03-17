@@ -528,7 +528,7 @@ impl Element for DiffElement {
 			let diff_line = &diff_lines[i];
 			let is_active = Some(i) == selection;
 
-			let color = match diff_line.diff_type {
+			let fallback_color = match diff_line.diff_type {
 				DiffType::_Header => opaque_grey(0.5, 1.0),
 				DiffType::Normal => cx.theme().colors().editor_foreground,
 				DiffType::Added => cx.theme().status().created,
@@ -542,18 +542,36 @@ impl Element for DiffElement {
 				(_, DiffType::Added) => cx.theme().status().created_background,
 				(_, DiffType::Removed) => cx.theme().status().deleted_background,
 			};
-			let run = TextRun {
-				len: diff_line.text.len(),
-				font: buffer_font.clone(),
-				color,
-				background_color: None,
-				underline: None,
-				strikethrough: None,
-			};
+
+			let runs: Vec<TextRun> =
+				if diff_line.highlight_runs.is_empty() || diff_line.text.is_empty() {
+					vec![TextRun {
+						len: diff_line.text.len(),
+						font: buffer_font.clone(),
+						color: fallback_color,
+						background_color: None,
+						underline: None,
+						strikethrough: None,
+					}]
+				} else {
+					diff_line
+						.highlight_runs
+						.iter()
+						.map(|hr| TextRun {
+							len: hr.byte_len,
+							font: buffer_font.clone(),
+							color: hr.color,
+							background_color: None,
+							underline: None,
+							strikethrough: None,
+						})
+						.collect()
+				};
+
 			let shaped_line =
 				window
 					.text_system()
-					.shape_line(diff_line.text.clone(), font_size, &[run], None);
+					.shape_line(diff_line.text.clone(), font_size, &runs, None);
 			lines.push((shaped_line, background_color))
 		}
 
@@ -629,14 +647,14 @@ impl Element for DiffElement {
 				.expect("Failed to paint line number");
 		}
 
-		for (i, line) in layout.lines.iter().enumerate() {
+		for (i, (line_text, line_bg)) in layout.lines.iter().enumerate() {
 			let y = i as f32 * layout.line_height - (scroll_top % layout.line_height);
 
 			let origin = bounds.origin + point(layout.gutter_dimensions.width, y);
 			let size = size(bounds.size.width, layout.line_height);
-			window.paint_quad(fill(Bounds { origin, size }, line.1));
+			window.paint_quad(fill(Bounds { origin, size }, *line_bg));
 
-			line.0
+			line_text
 				.paint(
 					origin,
 					layout.line_height,
