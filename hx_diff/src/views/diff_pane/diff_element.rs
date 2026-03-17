@@ -1,6 +1,7 @@
 use super::DiffType;
 use crate::diff_pane::DiffLine;
 use crate::diff_pane::GutterDimensions;
+use crate::syntax::HighlightRun;
 use crate::DiffPane;
 use gpui::*;
 use settings::Settings;
@@ -72,7 +73,7 @@ impl ScrollbarLayout {
 type DiffRegions = Vec<((usize, usize), DiffType)>;
 
 pub struct DiffLayout {
-	lines: Vec<(ShapedLine, Hsla)>,
+	lines: Vec<(Vec<(ShapedLine, Pixels)>, Hsla)>,
 	// gutter_hitbox: Hitbox,
 	gutter_dimensions: GutterDimensions,
 	scrollbar_layout: Option<ScrollbarLayout>,
@@ -80,6 +81,86 @@ pub struct DiffLayout {
 	line_height: Pixels,
 	line_numbers: Vec<ShapedLine>,
 	diff_regions: DiffRegions,
+}
+
+/// Build `TextRun`s covering the byte range `[seg_start, seg_end)` of the original line text,
+/// slicing through the syntax `highlight_runs` as needed.  Lengths in the returned runs are
+/// relative to the segment (i.e. they sum to `seg_end - seg_start`).
+fn extract_runs_for_segment(
+	highlight_runs: &[HighlightRun],
+	seg_start: usize,
+	seg_end: usize,
+	font: &Font,
+) -> Vec<TextRun> {
+	let seg_len = seg_end - seg_start;
+	if seg_len == 0 {
+		return Vec::new();
+	}
+
+	let mut runs = Vec::new();
+	let mut run_start = 0usize;
+
+	for hr in highlight_runs {
+		let run_end = run_start + hr.byte_len;
+		let overlap_start = run_start.max(seg_start);
+		let overlap_end = run_end.min(seg_end);
+		if overlap_start < overlap_end {
+			runs.push(TextRun {
+				len: overlap_end - overlap_start,
+				font: font.clone(),
+				color: hr.color,
+				background_color: None,
+				underline: None,
+				strikethrough: None,
+			});
+		}
+		run_start = run_end;
+		if run_start >= seg_end {
+			break;
+		}
+	}
+
+	runs
+}
+
+/// Split a line at tab characters and return `(segment_text, runs, x_offset)` triples.
+/// Each segment is the text between consecutive tabs, positioned at its tab-stop-aligned column.
+/// Lines with no tabs produce a single segment at x_offset zero.
+fn build_line_segments(
+	text: &str,
+	highlight_runs: &[HighlightRun],
+	tab_size: usize,
+	font: &Font,
+	char_advance: Pixels,
+) -> Vec<(SharedString, Vec<TextRun>, Pixels)> {
+	let mut segments = Vec::new();
+	let mut col: usize = 0;
+	let mut seg_start_byte: usize = 0;
+	let mut seg_start_col: usize = 0;
+
+	for (byte_pos, ch) in text.char_indices() {
+		if ch == '\t' {
+			if byte_pos > seg_start_byte {
+				let seg_text: SharedString = text[seg_start_byte..byte_pos].to_string().into();
+				let runs = extract_runs_for_segment(highlight_runs, seg_start_byte, byte_pos, font);
+				segments.push((seg_text, runs, char_advance * seg_start_col as f32));
+			}
+			col = ((col / tab_size) + 1) * tab_size;
+			seg_start_byte = byte_pos + 1; // '\t' is always one byte
+			seg_start_col = col;
+		} else {
+			col += 1;
+		}
+	}
+
+	// Final (or only) segment after the last tab.
+	if seg_start_byte < text.len() {
+		let seg_text: SharedString = text[seg_start_byte..].to_string().into();
+		let runs = extract_runs_for_segment(highlight_runs, seg_start_byte, text.len(), font);
+		segments.push((seg_text, runs, char_advance * seg_start_col as f32));
+	}
+
+	segments
 }
 
 impl DiffElement {
@@ -484,6 +565,15 @@ impl Element for DiffElement {
 		let diff_lines = &self.diff_pane.read(cx).diff_lines.clone(); // TODO: How to not clone?
 		let scroll_y = self.diff_pane.read(cx).scroll_y;
 		let selection = self.diff_pane.read(cx).selection;
+		let tab_size = self.diff_pane.read(cx).tab_size;
+
+		let char_advance = {
+			let font_id = cx.text_system().resolve_font(&buffer_font);
+			cx.text_system()
+				.advance(font_id, font_size, 'm')
+				.unwrap_or_default()
+				.width
+		};
 
 		let focus_handle = self.diff_pane.focus_handle(cx);
 		window.set_focus_handle(&focus_handle, cx);
@@ -543,36 +633,24 @@ impl Element for DiffElement {
 				(_, DiffType::Removed) => cx.theme().status().deleted_background,
 			};
 
-			let runs: Vec<TextRun> =
-				if diff_line.highlight_runs.is_empty() || diff_line.text.is_empty() {
-					vec![TextRun {
-						len: diff_line.text.len(),
-						font: buffer_font.clone(),
-						color: fallback_color,
-						background_color: None,
-						underline: None,
-						strikethrough: None,
-					}]
-				} else {
-					diff_line
-						.highlight_runs
-						.iter()
-						.map(|hr| TextRun {
-							len: hr.byte_len,
-							font: buffer_font.clone(),
-							color: hr.color,
-							background_color: None,
-							underline: None,
-							strikethrough: None,
-						})
-						.collect()
-				};
+			let segments = build_line_segments(
+				&diff_line.text,
+				&diff_line.highlight_runs,
+				tab_size,
+				&buffer_font,
+				char_advance,
+			);
 
-			let shaped_line =
-				window
-					.text_system()
-					.shape_line(diff_line.text.clone(), font_size, &runs, None);
-			lines.push((shaped_line, background_color))
+			let shaped_segments: Vec<(ShapedLine, Pixels)> = segments
+				.into_iter()
+				.map(|(seg_text, runs, x_offset)| {
+					let shaped = window
+						.text_system()
+						.shape_line(seg_text, font_size, &runs, None);
+					(shaped, x_offset)
+				})
+				.collect();
+			lines.push((shaped_segments, background_color))
 		}
 
 		self.diff_pane.update(cx, |diff_pane, _cx| {
@@ -647,23 +725,26 @@ impl Element for DiffElement {
 				.expect("Failed to paint line number");
 		}
 
-		for (i, (line_text, line_bg)) in layout.lines.iter().enumerate() {
+		for (i, (segments, line_bg)) in layout.lines.iter().enumerate() {
 			let y = i as f32 * layout.line_height - (scroll_top % layout.line_height);
 
 			let origin = bounds.origin + point(layout.gutter_dimensions.width, y);
 			let size = size(bounds.size.width, layout.line_height);
 			window.paint_quad(fill(Bounds { origin, size }, *line_bg));
 
-			line_text
-				.paint(
-					origin,
-					layout.line_height,
-					TextAlign::Left,
-					None,
-					window,
-					cx,
-				)
-				.expect("Failed to paint line");
+			for (shaped_segment, x_offset) in segments {
+				let seg_origin = origin + point(*x_offset, px(0.0));
+				shaped_segment
+					.paint(
+						seg_origin,
+						layout.line_height,
+						TextAlign::Left,
+						None,
+						window,
+						cx,
+					)
+					.expect("Failed to paint line segment");
+			}
 		}
 
 		self.paint_scrollbar(layout, window, cx);
